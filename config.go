@@ -52,10 +52,9 @@ type Config struct {
 	Ndots int `json:"ndot,omitempty"`
 
 	// DNSSEC key material
-	PubKey       *dns.DNSKEY    `json:"-"`
-	KeyTag       uint16         `json:"-"`
-	PrivKey      dns.PrivateKey `json:"-"`
-	DomainLabels int            `json:"-"`
+	PubKey  *dns.DNSKEY    `json:"-"`
+	KeyTag  uint16         `json:"-"`
+	PrivKey dns.PrivateKey `json:"-"`
 
 	log *log.Logger
 
@@ -134,7 +133,6 @@ func setDefaults(config *Config) error {
 		}
 	}
 	config.Domain = dns.Fqdn(strings.ToLower(config.Domain))
-	config.DomainLabels = dns.CountLabel(config.Domain)
 	if config.DNSSEC != "" {
 		// For some reason the + are replaces by spaces in etcd. Re-replace them
 		keyfile := strings.Replace(config.DNSSEC, " ", "+", -1)

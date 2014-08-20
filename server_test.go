@@ -65,7 +65,6 @@ func newTestServer(t *testing.T, c bool) *server {
 	}
 	s.config = new(Config)
 	s.config.Domain = "skydns.test."
-	s.config.DomainLabels = 2
 	s.config.DnsAddr = "127.0.0.1:" + StrPort
 	s.config.Nameservers = []string{"8.8.4.4:53"}
 	setDefaults(s.config)
