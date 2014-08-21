@@ -64,7 +64,8 @@ func newTestServer(t *testing.T, c bool) *server {
 		s.rcache = cache.New(100, 60) // 100 items, 60s ttl
 	}
 	s.config = new(Config)
-	s.config.Domain = "skydns.test."
+	s.config.Domain = make(DomainConfigMap)
+	s.config.Domain.Set("skydns.test.")
 	s.config.DnsAddr = "127.0.0.1:" + StrPort
 	s.config.Nameservers = []string{"8.8.4.4:53"}
 	setDefaults(s.config)
@@ -84,9 +85,10 @@ func newTestServer(t *testing.T, c bool) *server {
 func newTestServerDNSSEC(t *testing.T, cache bool) *server {
 	var err error
 	s := newTestServer(t, cache)
-	s.config.PubKey = newDNSKEY("skydns.test. IN DNSKEY 256 3 5 AwEAAaXfO+DOBMJsQ5H4TfiabwSpqE4cGL0Qlvh5hrQumrjr9eNSdIOjIHJJKCe56qBU5mH+iBlXP29SVf6UiiMjIrAPDVhClLeWFe0PC+XlWseAyRgiLHdQ8r95+AfkhO5aZgnCwYf9FGGSaT0+CRYN+PyDbXBTLK5FN+j5b6bb7z+d")
-	s.config.KeyTag = s.config.PubKey.KeyTag()
-	s.config.PrivKey, err = s.config.PubKey.ReadPrivateKey(strings.NewReader(`Private-key-format: v1.3
+	domainConfig := s.config.Domain["skydns.test."]
+	domainConfig.PubKey = newDNSKEY("skydns.test. IN DNSKEY 256 3 5 AwEAAaXfO+DOBMJsQ5H4TfiabwSpqE4cGL0Qlvh5hrQumrjr9eNSdIOjIHJJKCe56qBU5mH+iBlXP29SVf6UiiMjIrAPDVhClLeWFe0PC+XlWseAyRgiLHdQ8r95+AfkhO5aZgnCwYf9FGGSaT0+CRYN+PyDbXBTLK5FN+j5b6bb7z+d")
+	domainConfig.KeyTag = domainConfig.PubKey.KeyTag()
+	domainConfig.PrivKey, err = domainConfig.PubKey.ReadPrivateKey(strings.NewReader(`Private-key-format: v1.3
 Algorithm: 5 (RSASHA1)
 Modulus: pd874M4EwmxDkfhN+JpvBKmoThwYvRCW+HmGtC6auOv141J0g6MgckkoJ7nqoFTmYf6IGVc/b1JV/pSKIyMisA8NWEKUt5YV7Q8L5eVax4DJGCIsd1Dyv3n4B+SE7lpmCcLBh/0UYZJpPT4JFg34/INtcFMsrkU36PlvptvvP50=
 PublicExponent: AQAB
@@ -100,6 +102,7 @@ Coefficient: mMFr4+rDY5V24HZU3Oa5NEb55iQ56ZNa182GnNhWqX7UqWjcUUGjnkCy40BqeFAQ7lp
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.config.Domain["skydns.test."] = domainConfig
 	return s
 }
 

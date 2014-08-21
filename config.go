@@ -17,18 +17,90 @@ import (
 	"github.com/miekg/dns"
 )
 
+type DomainConfig struct {
+	// The hostmaster responsible for this domain,
+	// defaults to config.Hostmaster or hostmaster.<Domain>.
+	Hostmaster string `json:"hostmaster,omitempty"`
+
+	localNSAlias FQDN // "ns.dns." + domain (legacy)
+	dnsDomain FQDN // "dns". + domain
+
+	// DNSSEC key material
+	PubKey  *dns.DNSKEY    `json:"-"`
+	KeyTag  uint16         `json:"-"`
+	PrivKey dns.PrivateKey `json:"-"`
+}
+
+// Guarantees that field 'Hostmaster' is not empty.
+func (dc *DomainConfig) FillHostmaster(domain FQDN) {
+	if config.Hostmaster == "" {
+		dc.Hostmaster = "hostmaster." + string(domain)
+	} else {
+		// People probably don't know that SOA's email addresses cannot
+		// contain @-signs, replace them with dots
+		dc.Hostmaster = dns.Fqdn(strings.Replace(config.Hostmaster, "@", ".", -1))
+	}
+}
+
+func (dc *DomainConfig) PopulateNameserver(domain FQDN) {
+	if dc.localNSAlias == NoFQDN {
+		dc.localNSAlias = FQDN("ns.dns." + string(domain))
+	}
+	if dc.dnsDomain == NoFQDN {
+		dc.dnsDomain = FQDN("dns." + string(domain))
+	}
+}
+
+// FQDN in lower case
+type FQDN string
+
+const NoFQDN = FQDN("")
+
+func NewFQDN(domain string) FQDN {
+	return FQDN(dns.Fqdn(strings.ToLower(domain)))
+}
+
+type DomainConfigMap map[FQDN]DomainConfig
+
+// Returns nothing but the keys. For the flag.Value interface.
+func (dcm *DomainConfigMap) String() string {
+	return "" // XXX
+}
+
+// For the flag.Value interface.
+func (dcm *DomainConfigMap) Set(value string) error {
+	for _, domain := range strings.Split(value, ",") {
+		fqdn := NewFQDN(domain)
+		t := DomainConfig{}
+		t.FillHostmaster(fqdn)
+		t.PopulateNameserver(fqdn)
+		(*dcm)[fqdn] = t
+	}
+	return nil
+}
+
+// Returns the ancestor of 'subdomain' or NoFQDN.
+func (dcm *DomainConfigMap) Contains(subdomain FQDN) FQDN {
+	for fqdn, _ := range *dcm {
+		if strings.HasSuffix(string(subdomain), string(fqdn)) {
+			return fqdn
+		}
+	}
+	return NoFQDN
+}
+
 // Config provides options to the SkyDNS resolver.
 type Config struct {
 	// The ip:port SkyDNS should be listening on for incoming DNS requests.
 	DnsAddr string `json:"dns_addr,omitempty"`
 	// bind to port(s) activated by systemd. If set to true, this overrides DnsAddr.
 	Systemd bool `json:"systemd,omitempty"`
-	// The domain SkyDNS is authoritative for, defaults to skydns.local.
-	Domain string `json:"domain,omitempty"`
+	// The domain SkyDNS is authoritative for, defaults to "skydns.local." → {}
+	Domain DomainConfigMap `json:"domain,omitempty"`
 	// Domain pointing to a key where service info is stored when being queried
 	// for local.dns.skydns.local.
 	Local string `json:"local,omitempty"`
-	// The hostmaster responsible for this domain, defaults to hostmaster.<Domain>.
+	// The default hostmaster for domains where none is set.
 	Hostmaster string `json:"hostmaster,omitempty"`
 	DNSSEC     string `json:"dnssec,omitempty"`
 	// Round robin A/AAAA replies. Default is true.
@@ -51,16 +123,7 @@ type Config struct {
 	// How many labels a name should have before we allow forwarding. Default to 2.
 	Ndots int `json:"ndot,omitempty"`
 
-	// DNSSEC key material
-	PubKey  *dns.DNSKEY    `json:"-"`
-	KeyTag  uint16         `json:"-"`
-	PrivKey dns.PrivateKey `json:"-"`
-
 	log *log.Logger
-
-	// some predefined string "constants"
-	localDomain string // "local.dns." + config.Domain
-	dnsDomain   string // "dns". + config.Domain
 }
 
 func loadConfig(client *etcd.Client, config *Config) (*Config, error) {
@@ -92,15 +155,6 @@ func setDefaults(config *Config) error {
 	if config.DnsAddr == "" {
 		config.DnsAddr = "127.0.0.1:53"
 	}
-	if config.Domain == "" {
-		config.Domain = "skydns.local."
-	}
-	if config.Hostmaster == "" {
-		config.Hostmaster = "hostmaster." + config.Domain
-	}
-	// People probably don't know that SOA's email addresses cannot
-	// contain @-signs, replace them with dots
-	config.Hostmaster = dns.Fqdn(strings.Replace(config.Hostmaster, "@", ".", -1))
 	if config.MinTtl == 0 {
 		config.MinTtl = 60
 	}
@@ -132,23 +186,41 @@ func setDefaults(config *Config) error {
 			config.Nameservers = append(config.Nameservers, net.JoinHostPort(s, c.Port))
 		}
 	}
-	config.Domain = dns.Fqdn(strings.ToLower(config.Domain))
-	if config.DNSSEC != "" {
-		// For some reason the + are replaces by spaces in etcd. Re-replace them
-		keyfile := strings.Replace(config.DNSSEC, " ", "+", -1)
-		k, p, err := ParseKeyFile(keyfile)
-		if err != nil {
-			return err
-		}
-		if k.Header().Name != dns.Fqdn(config.Domain) {
-			return fmt.Errorf("ownername of DNSKEY must match SkyDNS domain")
-		}
-		k.Header().Ttl = config.Ttl
-		config.PubKey = k
-		config.KeyTag = k.KeyTag()
-		config.PrivKey = p
+
+	if len(config.Domain) == 0 {
+		config.Domain.Set("skydns.local.")
 	}
-	config.localDomain = "local.dns." + config.Domain
-	config.dnsDomain = "dns." + config.Domain
+	if config.Hostmaster == "" {
+		config.Hostmaster = "hostmaster@skydns.local."
+	}
+	config.Hostmaster = dns.Fqdn(strings.Replace(config.Hostmaster, "@", ".", -1))
+	for fqdn := range config.Domain {
+		if config.Domain[fqdn].Hostmaster != "" {
+			continue
+		}
+		tmpDomainConfig := config.Domain[fqdn]
+		tmpDomainConfig.FillHostmaster(fqdn)
+		config.Domain[fqdn] = tmpDomainConfig
+	}
+	if config.DNSSEC != "" {
+		for _, keyfileName := range strings.Split(config.DNSSEC, ",") {
+			// For some reason the + are replaces by spaces in etcd. Re-replace them
+			keyfile := strings.Replace(keyfileName, " ", "+", -1)
+			k, p, err := ParseKeyFile(keyfile)
+			if err != nil {
+				return err
+			}
+			fqdnFromHeader := NewFQDN(k.Header().Name)
+			tmpDomainConfig, keyExists := config.Domain[fqdnFromHeader]
+			if !keyExists {
+				return fmt.Errorf(fmt.Sprintf("ownername of DNSKEY in '%s' must match SkyDNS domain", keyfile))
+			}
+			k.Header().Ttl = config.Ttl
+			tmpDomainConfig.PubKey = k
+			tmpDomainConfig.KeyTag = k.KeyTag()
+			tmpDomainConfig.PrivKey = p
+			config.Domain[fqdnFromHeader] = tmpDomainConfig
+		}
+	}
 	return nil
 }
