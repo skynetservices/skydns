@@ -16,23 +16,23 @@ import (
 // next closer will be the full qname which we then will deny.
 // Idem for source of synthesis.
 
-func (s *server) Denial(m *dns.Msg) {
+func (s *server) Denial(m *dns.Msg, ourDomain string) {
 	if m.Rcode == dns.RcodeNameError {
 		// ce is qname minus the left label
 		idx := dns.Split(m.Question[0].Name)
 		ce := m.Question[0].Name[idx[1]:]
 
-		nsec3ce, nsec3wildcard := newNSEC3CEandWildcard(s.config.Domain, ce, s.config.MinTtl)
+		nsec3ce, nsec3wildcard := newNSEC3CEandWildcard(ourDomain, ce, s.config.MinTtl)
 		// Add ce and wildcard
 		m.Ns = append(m.Ns, nsec3ce)
 		m.Ns = append(m.Ns, nsec3wildcard)
 		// Deny Qname nsec3
-		m.Ns = append(m.Ns, s.newNSEC3NameError(m.Question[0].Name))
+		m.Ns = append(m.Ns, s.newNSEC3NameError(m.Question[0].Name, ourDomain))
 	}
 	if m.Rcode == dns.RcodeSuccess && len(m.Ns) == 1 {
 		// NODATA
 		if _, ok := m.Ns[0].(*dns.SOA); ok {
-			m.Ns = append(m.Ns, s.newNSEC3NoData(m.Question[0].Name))
+			m.Ns = append(m.Ns, s.newNSEC3NoData(m.Question[0].Name, ourDomain))
 		}
 	}
 }
@@ -52,7 +52,7 @@ func unpackBase32(b []byte) string {
 }
 
 // newNSEC3NameError returns the NSEC3 record needed to denial qname.
-func (s *server) newNSEC3NameError(qname string) *dns.NSEC3 {
+func (s *server) newNSEC3NameError(qname string, ourDomain string) *dns.NSEC3 {
 	n := new(dns.NSEC3)
 	n.Hdr.Class = dns.ClassINET
 	n.Hdr.Rrtype = dns.TypeNSEC3
@@ -66,7 +66,7 @@ func (s *server) newNSEC3NameError(qname string) *dns.NSEC3 {
 
 	buf := packBase32(covername)
 	byteArith(buf, false) // one before
-	n.Hdr.Name = strings.ToLower(unpackBase32(buf)) + "." + s.config.Domain
+	n.Hdr.Name = strings.ToLower(unpackBase32(buf)) + "." + ourDomain
 	byteArith(buf, true) // one next
 	byteArith(buf, true) // and another one
 	n.NextDomain = unpackBase32(buf)
@@ -74,7 +74,7 @@ func (s *server) newNSEC3NameError(qname string) *dns.NSEC3 {
 }
 
 // newNSEC3NoData returns the NSEC3 record needed to denial the types
-func (s *server) newNSEC3NoData(qname string) *dns.NSEC3 {
+func (s *server) newNSEC3NoData(qname string, ourDomain string) *dns.NSEC3 {
 	n := new(dns.NSEC3)
 	n.Hdr.Class = dns.ClassINET
 	n.Hdr.Rrtype = dns.TypeNSEC3
@@ -89,13 +89,13 @@ func (s *server) newNSEC3NoData(qname string) *dns.NSEC3 {
 	byteArith(buf, true) // one next
 	n.NextDomain = unpackBase32(buf)
 
-	n.Hdr.Name += "." + s.config.Domain
+	n.Hdr.Name += "." + ourDomain
 	return n
 }
 
 // newNSEC3CEandWildcard returns the NSEC3 for the closest encloser
 // and the NSEC3 that denies that wildcard at that level.
-func newNSEC3CEandWildcard(apex, ce string, ttl uint32) (*dns.NSEC3, *dns.NSEC3) {
+func newNSEC3CEandWildcard(apex string, ce string, ttl uint32) (*dns.NSEC3, *dns.NSEC3) {
 	n1 := new(dns.NSEC3)
 	n1.Hdr.Class = dns.ClassINET
 	n1.Hdr.Rrtype = dns.TypeNSEC3

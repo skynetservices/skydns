@@ -41,7 +41,7 @@ func ParseKeyFile(file string) (*dns.DNSKEY, dns.PrivateKey, error) {
 // throw away signatures when services decide to have longer TTL. So we just
 // set the origTTL to 60.
 // TODO(miek): revisit origTTL
-func (s *server) Sign(m *dns.Msg, bufsize uint16) {
+func (s *server) Sign(m *dns.Msg, bufsize uint16, domain string, domainConfig DomainConfig) {
 	now := time.Now().UTC()
 	incep := uint32(now.Add(-3 * time.Hour).Unix())     // 2+1 hours, be sure to catch daylight saving time and such
 	expir := uint32(now.Add(7 * 24 * time.Hour).Unix()) // sign for a week
@@ -50,10 +50,10 @@ func (s *server) Sign(m *dns.Msg, bufsize uint16) {
 		if r[0].Header().Rrtype == dns.TypeRRSIG {
 			continue
 		}
-		if !dns.IsSubDomain(s.config.Domain, r[0].Header().Name) {
+		if !dns.IsSubDomain(string(domain), r[0].Header().Name) {
 			continue
 		}
-		if sig, err := s.signSet(r, now, incep, expir); err == nil {
+		if sig, err := s.signSet(r, now, incep, expir, domain, domainConfig); err == nil {
 			m.Answer = append(m.Answer, sig)
 		}
 	}
@@ -61,10 +61,10 @@ func (s *server) Sign(m *dns.Msg, bufsize uint16) {
 		if r[0].Header().Rrtype == dns.TypeRRSIG {
 			continue
 		}
-		if !dns.IsSubDomain(s.config.Domain, r[0].Header().Name) {
+		if !dns.IsSubDomain(string(domain), r[0].Header().Name) {
 			continue
 		}
-		if sig, err := s.signSet(r, now, incep, expir); err == nil {
+		if sig, err := s.signSet(r, now, incep, expir, domain, domainConfig); err == nil {
 			m.Ns = append(m.Ns, sig)
 		}
 	}
@@ -72,10 +72,10 @@ func (s *server) Sign(m *dns.Msg, bufsize uint16) {
 		if r[0].Header().Rrtype == dns.TypeRRSIG || r[0].Header().Rrtype == dns.TypeOPT {
 			continue
 		}
-		if !dns.IsSubDomain(s.config.Domain, r[0].Header().Name) {
+		if !dns.IsSubDomain(string(domain), r[0].Header().Name) {
 			continue
 		}
-		if sig, err := s.signSet(r, now, incep, expir); err == nil {
+		if sig, err := s.signSet(r, now, incep, expir, domain, domainConfig); err == nil {
 			m.Extra = append(m.Extra, sig)
 		}
 	}
@@ -91,7 +91,8 @@ func (s *server) Sign(m *dns.Msg, bufsize uint16) {
 	return
 }
 
-func (s *server) signSet(r []dns.RR, now time.Time, incep, expir uint32) (*dns.RRSIG, error) {
+func (s *server) signSet(r []dns.RR, now time.Time, incep, expir uint32,
+	domain string, domainConfig DomainConfig) (*dns.RRSIG, error) {
 	key := cache.Key(r)
 	if m, exp, hit := s.scache.Search(key); hit { // There can only be one sig in this cache.
 		// Is it still valid 24 hours from now?
@@ -103,12 +104,12 @@ func (s *server) signSet(r []dns.RR, now time.Time, incep, expir uint32) (*dns.R
 	s.config.log.Infof("scache miss for %s type %d", r[0].Header().Name, r[0].Header().Rrtype)
 	StatsDnssecCacheMiss.Inc(1)
 	sig, err, shared := inflight.Do(key, func() (*dns.RRSIG, error) {
-		sig1 := s.NewRRSIG(incep, expir)
+		sig1 := s.NewRRSIG(incep, expir, domainConfig)
 		sig1.Header().Ttl = r[0].Header().Ttl
 		if r[0].Header().Rrtype == dns.TypeTXT {
 			sig1.OrigTtl = 0
 		}
-		e := sig1.Sign(s.config.PrivKey, r)
+		e := sig1.Sign(domainConfig.PrivKey, r)
 		if e != nil {
 			s.config.log.Errorf("failed to sign: %s", e.Error())
 		}
@@ -123,16 +124,16 @@ func (s *server) signSet(r []dns.RR, now time.Time, incep, expir uint32) (*dns.R
 	return dns.Copy(sig).(*dns.RRSIG), nil
 }
 
-func (s *server) NewRRSIG(incep, expir uint32) *dns.RRSIG {
+func (s *server) NewRRSIG(incep, expir uint32, domainConfig DomainConfig) *dns.RRSIG {
 	sig := new(dns.RRSIG)
 	sig.Hdr.Rrtype = dns.TypeRRSIG
 	sig.Hdr.Ttl = s.config.Ttl
 	sig.OrigTtl = s.config.Ttl
-	sig.Algorithm = s.config.PubKey.Algorithm
-	sig.KeyTag = s.config.KeyTag
+	sig.Algorithm = domainConfig.PubKey.Algorithm
+	sig.KeyTag = domainConfig.KeyTag
 	sig.Inception = incep
 	sig.Expiration = expir
-	sig.SignerName = s.config.PubKey.Hdr.Name
+	sig.SignerName = domainConfig.PubKey.Hdr.Name
 	return sig
 }
 

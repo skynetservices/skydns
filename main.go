@@ -24,7 +24,7 @@ var (
 	tlskey     = ""
 	tlspem     = ""
 	cacert     = ""
-	config     = &Config{ReadTimeout: 0, Domain: "", DnsAddr: "", DNSSEC: ""}
+	config     = &Config{ReadTimeout: 0, Domain: make(DomainConfigMap), DnsAddr: "", DNSSEC: ""}
 	nameserver = ""
 	machine    = ""
 	discover   = false
@@ -45,7 +45,7 @@ func env(key, def string) string {
 }
 
 func init() {
-	flag.StringVar(&config.Domain, "domain", env("SKYDNS_DOMAIN", "skydns.local."), "domain to anchor requests to (SKYDNS_DOMAIN)")
+	flag.Var(&config.Domain, "domain", "domain to anchor requests to (SKYDNS_DOMAIN)")
 	flag.StringVar(&config.DnsAddr, "addr", env("SKYDNS_ADDR", "127.0.0.1:53"), "ip:port to bind to (SKYDNS_ADDR)")
 	flag.StringVar(&nameserver, "nameservers", env("SKYDNS_NAMESERVERS", ""), "nameserver address(es) to forward (non-local) queries to e.g. 8.8.8.8:53,8.8.4.4:53")
 	flag.StringVar(&machine, "machines", env("ETCD_MACHINES", ""), "machine address(es) running etcd")
@@ -82,6 +82,9 @@ func main() {
 	}
 	if err := validateHostPort(config.DnsAddr); err != nil {
 		log.Fatalf("addr is invalid: %s\n", err)
+	}
+	if len(config.Domain) == 0 {
+		config.Domain.Set(env("SKYDNS_DOMAIN", "skydns.local."))
 	}
 	config, err := loadConfig(client, config)
 	if err != nil {
