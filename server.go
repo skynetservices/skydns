@@ -192,16 +192,16 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		s.config.log.Infof("received DNS Request for %q from %q with type %d", q.Name, w.RemoteAddr(), q.Qtype)
 	}
 	// If the qname is local.dns.skydns.local. and s.config.Local != "", substitute that name.
-	if s.config.Local != "" && string(name) == "local.dns."+string(ourDomain) {
+	if s.config.Local != "" && name == "local.dns."+ourDomain {
 		name = NewFQDN(s.config.Local)
 	}
 
-	if q.Qtype == dns.TypePTR && strings.HasSuffix(string(name), ".in-addr.arpa.") || strings.HasSuffix(string(name), ".ip6.arpa.") {
+	if q.Qtype == dns.TypePTR && strings.HasSuffix(name, ".in-addr.arpa.") || strings.HasSuffix(name, ".ip6.arpa.") {
 		s.ServeDNSReverse(w, req)
 		return
 	}
 
-	if q.Qclass != dns.ClassCHAOS && ourDomain == NoFQDN {
+	if q.Qclass != dns.ClassCHAOS && ourDomain == "" {
 		s.ServeDNSForward(w, req)
 		return
 	}
@@ -263,10 +263,10 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	}
 	if q.Qclass == dns.ClassCHAOS {
 		if q.Qtype == dns.TypeTXT {
-			switch string(name) {
+			switch name {
 			case "authors.bind.":
 				fallthrough
-			case string(ourDomain):
+			case ourDomain:
 				hdr := dns.RR_Header{Name: q.Name, Rrtype: dns.TypeTXT, Class: dns.ClassCHAOS, Ttl: 0}
 				authors := []string{"Erik St. Martin", "Brian Ketelsen", "Miek Gieben", "Michael Crosby"}
 				for _, a := range authors {
@@ -339,7 +339,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 				for _, r := range records {
 					if v, ok := r.(*dns.CNAME); ok {
 						// TODO(mark): descent on any of our domains
-						if !dns.IsSubDomain(string(ourDomain), v.Target) {
+						if !dns.IsSubDomain(ourDomain, v.Target) {
 							target = v.Target
 							break
 						}
@@ -400,8 +400,8 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	}
 }
 
-func (s *server) AddressRecords(q dns.Question, name FQDN, previousRecords []dns.RR) (records []dns.RR, err error) {
-	path, star := msg.PathWithWildcard(string(name))
+func (s *server) AddressRecords(q dns.Question, name string, previousRecords []dns.RR) (records []dns.RR, err error) {
+	path, star := msg.PathWithWildcard(name)
 	r, err := get(s.client, path, true)
 	if err != nil {
 		return nil, err
@@ -447,7 +447,7 @@ func (s *server) AddressRecords(q dns.Question, name FQDN, previousRecords []dns
 		}
 		return records, nil
 	}
-	nodes, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(string(name)), "/"), star, nil)
+	nodes, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
 	if err != nil {
 		s.config.log.Infof("failed to parse json: %s", err.Error())
 		return nil, err
@@ -507,8 +507,8 @@ func (s *server) AddressRecords(q dns.Question, name FQDN, previousRecords []dns
 }
 
 // NSRecords returns NS records from etcd.
-func (s *server) NSRecords(q dns.Question, name FQDN) (records []dns.RR, extra []dns.RR, err error) {
-	path, star := msg.PathWithWildcard(string(name))
+func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra []dns.RR, err error) {
+	path, star := msg.PathWithWildcard(name)
 	r, err := get(s.client, path, true)
 	if err != nil {
 		return nil, nil, err
@@ -538,7 +538,7 @@ func (s *server) NSRecords(q dns.Question, name FQDN) (records []dns.RR, extra [
 		return records, extra, nil
 	}
 
-	sx, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(string(name)), "/"), star, nil)
+	sx, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
 	if err != nil || len(sx) == 0 {
 		return nil, nil, err
 	}
@@ -562,8 +562,8 @@ func (s *server) NSRecords(q dns.Question, name FQDN) (records []dns.RR, extra [
 
 // SRVRecords returns SRV records from etcd.
 // If the Target is not an name but an IP address, an name is created .
-func (s *server) SRVRecords(q dns.Question, name FQDN, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
-	path, star := msg.PathWithWildcard(string(name))
+func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
+	path, star := msg.PathWithWildcard(name)
 	r, err := get(s.client, path, true)
 	if err != nil {
 		return nil, nil, err
@@ -585,7 +585,7 @@ func (s *server) SRVRecords(q dns.Question, name FQDN, bufsize uint16, dnssec bo
 		case ip == nil:
 			srv := serv.NewSRV(q.Name, uint16(100))
 			records = append(records, srv)
-			if !dns.IsSubDomain(string(name), srv.Target) {
+			if !dns.IsSubDomain(name, srv.Target) {
 				m1, e1 := s.Lookup(srv.Target, dns.TypeA, bufsize, dnssec)
 				if e1 == nil {
 					extra = append(extra, m1.Answer...)
@@ -612,7 +612,7 @@ func (s *server) SRVRecords(q dns.Question, name FQDN, bufsize uint16, dnssec bo
 		return records, extra, nil
 	}
 
-	sx, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(string(name)), "/"), star, nil)
+	sx, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
 	if err != nil || len(sx) == 0 {
 		return nil, nil, err
 	}
@@ -644,7 +644,7 @@ func (s *server) SRVRecords(q dns.Question, name FQDN, bufsize uint16, dnssec bo
 			srv := serv.NewSRV(q.Name, weight)
 			records = append(records, srv)
 			if _, ok := lookup[srv.Target]; !ok {
-				if !dns.IsSubDomain(string(name), srv.Target) {
+				if !dns.IsSubDomain(name, srv.Target) {
 					m1, e1 := s.Lookup(srv.Target, dns.TypeA, bufsize, dnssec)
 					if e1 == nil {
 						extra = append(extra, m1.Answer...)
@@ -674,8 +674,8 @@ func (s *server) SRVRecords(q dns.Question, name FQDN, bufsize uint16, dnssec bo
 	return records, extra, nil
 }
 
-func (s *server) CNAMERecords(q dns.Question, name FQDN) (records []dns.RR, err error) {
-	path, _ := msg.PathWithWildcard(string(name)) // no wildcards here
+func (s *server) CNAMERecords(q dns.Question, name string) (records []dns.RR, err error) {
+	path, _ := msg.PathWithWildcard(name) // no wildcards here
 	r, err := get(s.client, path, true)
 	if err != nil {
 		return nil, err
@@ -729,7 +729,7 @@ func (s *server) PTRRecords(q dns.Question) (records []dns.RR, err error) {
 
 // SOA returns a SOA record for this SkyDNS instance.
 // The 'answeringServer' is this instance, or TODO(mark): its domain-related alias.
-func (s *server) NewSOA(domain, answeringServer FQDN, hostmaster string) dns.RR {
+func (s *server) NewSOA(domain, answeringServer string, hostmaster string) dns.RR {
 	return &dns.SOA{Hdr: dns.RR_Header{Name: string(domain), Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: s.config.Ttl},
 		Ns:      string(answeringServer),
 		Mbox:    hostmaster,

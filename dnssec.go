@@ -41,7 +41,7 @@ func ParseKeyFile(file string) (*dns.DNSKEY, dns.PrivateKey, error) {
 // throw away signatures when services decide to have longer TTL. So we just
 // set the origTTL to 60.
 // TODO(miek): revisit origTTL
-func (s *server) Sign(m *dns.Msg, bufsize uint16, domain FQDN, domainConfig DomainConfig) {
+func (s *server) Sign(m *dns.Msg, bufsize uint16, domain string, domainConfig DomainConfig) {
 	now := time.Now().UTC()
 	incep := uint32(now.Add(-3 * time.Hour).Unix())     // 2+1 hours, be sure to catch daylight saving time and such
 	expir := uint32(now.Add(7 * 24 * time.Hour).Unix()) // sign for a week
@@ -91,8 +91,8 @@ func (s *server) Sign(m *dns.Msg, bufsize uint16, domain FQDN, domainConfig Doma
 	return
 }
 
-func (s *server) signSet(r []dns.RR, now time.Time, incep, expir uint32, 
-	domain FQDN, domainConfig DomainConfig) (*dns.RRSIG, error) {
+func (s *server) signSet(r []dns.RR, now time.Time, incep, expir uint32,
+	domain string, domainConfig DomainConfig) (*dns.RRSIG, error) {
 	key := cache.Key(r)
 	if m, exp, hit := s.scache.Search(key); hit { // There can only be one sig in this cache.
 		// Is it still valid 24 hours from now?

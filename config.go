@@ -22,8 +22,8 @@ type DomainConfig struct {
 	// defaults to config.Hostmaster or hostmaster.<Domain>.
 	Hostmaster string `json:"hostmaster,omitempty"`
 
-	localNSAlias FQDN // "ns.dns." + domain (legacy)
-	dnsDomain FQDN // "dns". + domain
+	localNSAlias string // "ns.dns." + domain (legacy)
+	dnsDomain    string // "dns". + domain
 
 	// DNSSEC key material
 	PubKey  *dns.DNSKEY    `json:"-"`
@@ -32,7 +32,7 @@ type DomainConfig struct {
 }
 
 // Guarantees that field 'Hostmaster' is not empty.
-func (dc *DomainConfig) FillHostmaster(domain FQDN) {
+func (dc *DomainConfig) FillHostmaster(domain string) {
 	if config.Hostmaster == "" {
 		dc.Hostmaster = "hostmaster." + string(domain)
 	} else {
@@ -42,25 +42,20 @@ func (dc *DomainConfig) FillHostmaster(domain FQDN) {
 	}
 }
 
-func (dc *DomainConfig) PopulateNameserver(domain FQDN) {
-	if dc.localNSAlias == NoFQDN {
-		dc.localNSAlias = FQDN("ns.dns." + string(domain))
+func (dc *DomainConfig) PopulateNameserver(domain string) {
+	if dc.localNSAlias == "" {
+		dc.localNSAlias = "ns.dns." + domain
 	}
-	if dc.dnsDomain == NoFQDN {
-		dc.dnsDomain = FQDN("dns." + string(domain))
+	if dc.dnsDomain == "" {
+		dc.dnsDomain = "dns." + domain
 	}
 }
 
-// FQDN in lower case
-type FQDN string
-
-const NoFQDN = FQDN("")
-
-func NewFQDN(domain string) FQDN {
-	return FQDN(dns.Fqdn(strings.ToLower(domain)))
+func NewFQDN(domain string) string {
+	return dns.Fqdn(strings.ToLower(domain))
 }
 
-type DomainConfigMap map[FQDN]DomainConfig
+type DomainConfigMap map[string]DomainConfig
 
 // Returns nothing but the keys. For the flag.Value interface.
 func (dcm *DomainConfigMap) String() string {
@@ -79,14 +74,14 @@ func (dcm *DomainConfigMap) Set(value string) error {
 	return nil
 }
 
-// Returns the ancestor of 'subdomain' or NoFQDN.
-func (dcm *DomainConfigMap) Contains(subdomain FQDN) FQDN {
+// Returns the ancestor of 'subdomain' or "".
+func (dcm *DomainConfigMap) Contains(subdomain string) string {
 	for fqdn, _ := range *dcm {
 		if strings.HasSuffix(string(subdomain), string(fqdn)) {
 			return fqdn
 		}
 	}
-	return NoFQDN
+	return ""
 }
 
 // Config provides options to the SkyDNS resolver.
