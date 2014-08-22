@@ -160,7 +160,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	m1, exp, hit := s.rcache.Search(key)
 	if hit {
 		// Cache hit! \o/
-		if time.Since(exp) < 0 {
+		if time.Since(exp) < 0 { // TODO(mark): expensive call; TTL management in a central cache
 			m1.Id = m.Id
 			if dnssec {
 				StatsDnssecOkCount.Inc(1)
@@ -192,7 +192,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		s.config.log.Infof("received DNS Request for %q from %q with type %d", q.Name, w.RemoteAddr(), q.Qtype)
 	}
 	// If the qname is local.dns.skydns.local. and s.config.Local != "", substitute that name.
-	if s.config.Local != "" && string(name) == "local.dns." + string(ourDomain) {
+	if s.config.Local != "" && string(name) == "local.dns."+string(ourDomain) {
 		name = NewFQDN(s.config.Local)
 	}
 
@@ -205,6 +205,9 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		s.ServeDNSForward(w, req)
 		return
 	}
+
+	// TODO(mark): make this a per-handler variable
+	ourSOA := s.NewSOA(ourDomain, ourDomainConfig.localNSAlias, ourDomainConfig.Hostmaster)
 
 	defer func() {
 		if m.Rcode == dns.RcodeServerFailure {
@@ -248,9 +251,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 
 	if name == ourDomain {
 		if q.Qtype == dns.TypeSOA {
-			m.Answer = []dns.RR{s.NewSOA(ourDomain,
-				ourDomainConfig.localNSAlias,
-				ourDomainConfig.Hostmaster)}
+			m.Answer = []dns.RR{ourSOA}
 			return
 		}
 		if q.Qtype == dns.TypeDNSKEY {
@@ -311,9 +312,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		if err != nil {
 			if e, ok := err.(*etcd.EtcdError); ok {
 				if e.ErrorCode == 100 {
-					s.NameError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NameError(m, req, ourSOA)
 					return
 				}
 			}
@@ -325,9 +324,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		if err != nil {
 			if e, ok := err.(*etcd.EtcdError); ok {
 				if e.ErrorCode == 100 {
-					s.NameError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NameError(m, req, ourSOA)
 					return
 				}
 			}
@@ -335,9 +332,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 				// We can not complete the CNAME internally, *iff* there is a
 				// external name in the set, take it, and try to resolve it externally.
 				if len(records) == 0 {
-					s.NameError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NameError(m, req, ourSOA)
 					return
 				}
 				target := ""
@@ -352,17 +347,13 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 				}
 				if target == "" {
 					s.config.log.Warningf("incomplete CNAME chain for %s", name)
-					s.NoDataError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NoDataError(m, req, ourSOA)
 					return
 				}
 				m1, e1 := s.Lookup(target, req.Question[0].Qtype, bufsize, dnssec)
 				if e1 != nil {
 					s.config.log.Errorf("%q", err)
-					s.NoDataError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NoDataError(m, req, ourSOA)
 					return
 				}
 				records = append(records, m1.Answer...)
@@ -374,9 +365,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		if err != nil {
 			if e, ok := err.(*etcd.EtcdError); ok {
 				if e.ErrorCode == 100 {
-					s.NameError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NameError(m, req, ourSOA)
 					return
 				}
 			}
@@ -389,9 +378,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		if err != nil {
 			if e, ok := err.(*etcd.EtcdError); ok {
 				if e.ErrorCode == 100 {
-					s.NameError(m, req, ourDomain,
-						ourDomainConfig.localNSAlias,
-						ourDomainConfig.Hostmaster)
+					s.NameError(m, req, ourSOA)
 					return
 				}
 			}
@@ -408,9 +395,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 
 	if len(m.Answer) == 0 { // NODATA response
 		StatsNoDataCount.Inc(1)
-		m.Ns = []dns.RR{s.NewSOA(ourDomain,
-			ourDomainConfig.localNSAlias,
-			ourDomainConfig.Hostmaster)}
+		m.Ns = []dns.RR{ourSOA}
 		m.Ns[0].Header().Ttl = s.config.MinTtl
 	}
 }
@@ -748,7 +733,7 @@ func (s *server) NewSOA(domain, answeringServer FQDN, hostmaster string) dns.RR 
 	return &dns.SOA{Hdr: dns.RR_Header{Name: string(domain), Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: s.config.Ttl},
 		Ns:      string(answeringServer),
 		Mbox:    hostmaster,
-		Serial:  uint32(time.Now().Truncate(time.Hour).Unix()),
+		Serial:  uint32(time.Now().Truncate(time.Hour).Unix()), // TODO(mark): syscalls for datetime are expensive, replace by etcd state
 		Refresh: 28800,
 		Retry:   7200,
 		Expire:  604800,
@@ -851,16 +836,16 @@ func (s *server) calculateTtl(node *etcd.Node, serv *msg.Service) uint32 {
 	return serv.Ttl
 }
 
-func (s *server) NameError(m, req *dns.Msg, domain, answeringServer FQDN, hostmaster string) {
+func (s *server) NameError(m, req *dns.Msg, ourSOA dns.RR) {
 	m.SetRcode(req, dns.RcodeNameError)
-	m.Ns = []dns.RR{s.NewSOA(domain, answeringServer, hostmaster)}
+	m.Ns = []dns.RR{ourSOA}
 	m.Ns[0].Header().Ttl = s.config.MinTtl
 	StatsNameErrorCount.Inc(1)
 }
 
-func (s *server) NoDataError(m, req *dns.Msg, domain, answeringServer FQDN, hostmaster string) {
+func (s *server) NoDataError(m, req *dns.Msg, ourSOA dns.RR) {
 	m.SetRcode(req, dns.RcodeSuccess)
-	m.Ns = []dns.RR{s.NewSOA(domain, answeringServer, hostmaster)}
+	m.Ns = []dns.RR{ourSOA}
 	m.Ns[0].Header().Ttl = s.config.MinTtl
 	//	StatsNoDataCount.Inc(1)
 }
