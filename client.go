@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"errors"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -65,9 +66,9 @@ func (s *server) UpdateClient(resp *etcd.Response) {
 	}
 }
 
-// get is a wrapper for client.Get that uses SingleInflight to suppress multiple
+// lookup is a wrapper for client.Get that uses SingleInflight to suppress multiple
 // outstanding queries.
-func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, error) {
+func lookup(client *etcd.Client, path string, recursive bool) (*etcd.Response, error) {
 	resp, err, _ := etcdInflight.Do(path, func() (*etcd.Response, error) {
 		r, e := client.Get(path, false, recursive)
 		if e != nil {
@@ -75,9 +76,71 @@ func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, erro
 		}
 		return r, e
 	})
-	if err != nil {
-		return resp, err
-	}
+
 	// shared?
 	return resp, err
+}
+
+// first, we look for entries matching incoming request
+// if this fails then check if there is a wildcard DNS entry for the subdomain of incoming request
+func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, error) {
+	r, err := lookup(client, path, recursive)
+
+	//no matching records => try wildcard dns
+	if (r == nil) {
+		//load all defined wildcard entries
+		//For most of use cases there will be one or two wild card DNS rules => this should not be perf issue to load all
+		r2, e := lookup(client, "/skydns/*", true)
+
+		if e != nil {
+			return nil, e
+		}
+
+        //look for most specific entry matching request path
+		best := bestMatch(wildcardPath(path), &r2.Node.Nodes)
+		if (best == nil) {
+			return nil, errors.New("No match")
+		}
+
+		//Technically we do not need to lookup again as we already have all data in the return Node
+		//However, i am not sure how to create valid etcd.Response with meaningful Raft* and *Index values
+		//For now we will do third ETCD lookup.
+		//TODO: consider optimizing this to avoid extra lookup
+		return lookup(client, best.Key, recursive)
+	}
+	return r, err
+}
+
+//Hardcoding "/skydns" here is a bit ugly. Passing prefix and actual lookup string might be cleaner solution but it requires
+//   larger code refactoring and prefix is hardcoded in other places anyways.
+func wildcardPath(path string) string {
+	return strings.Replace(path, "/skydns", "/skydns/*", 1)
+}
+
+//find matching wildcard DNS entries.
+// Looking for leaf directory entry those key is prefix of lookup path
+//
+// Motivating example:
+//   if we have entry for *.a.example.com then it should match
+//     a.example.com
+//     x.a.example.com
+//     y.x.example.com
+//   but should not match
+//     b.example.com
+func bestMatch(path string, nodes *etcd.Nodes) *etcd.Node {
+	for _, n := range *nodes {
+		//Need to match /com/example but not /com/example1. Thus use HasPrefix
+		if (n.Dir && path == n.Key || strings.HasPrefix(path, n.Key + "/")) {
+			if (isLeafDirectory(n)) {
+				return n
+			}
+			return bestMatch(path, &n.Nodes)
+		}
+	}
+
+	return nil
+}
+
+func isLeafDirectory(n *etcd.Node) bool {
+	return n.Dir && n.Nodes.Len() != 0 && !n.Nodes[0].Dir
 }
