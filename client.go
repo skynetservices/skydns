@@ -67,7 +67,7 @@ func (s *server) UpdateClient(resp *etcd.Response) {
 
 // lookup is a wrapper for client.Get that uses SingleInflight to suppress multiple
 // outstanding queries.
-func lookup(client *etcd.Client, path string, recursive bool) (*etcd.Response, error) {
+func lookup(client *etcd.Client, path string, recursive bool) (*etcd.Node, error) {
 	resp, err, _ := etcdInflight.Do(path, func() (*etcd.Response, error) {
 		r, e := client.Get(path, false, recursive)
 		if e != nil {
@@ -76,38 +76,39 @@ func lookup(client *etcd.Client, path string, recursive bool) (*etcd.Response, e
 		return r, e
 	})
 
+	if (resp == nil) {
+		return nil, err
+	}
+
 	// shared?
-	return resp, err
+	return resp.Node, err
 }
 
 // first, we look for entries matching incoming request
 // if this fails then check if there is a wildcard DNS entry for the subdomain of incoming request
-func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, error) {
-	r, err := lookup(client, path, recursive)
+func get(client *etcd.Client, path string, recursive bool) (*etcd.Node, error) {
+	n1, err := lookup(client, path, recursive)
 
 	//no matching records => try wildcard dns
-	if (r == nil) {
+	if (n1 == nil) {
 		//load all defined wildcard entries
 		//For most of use cases there will be one or two wild card DNS rules => this should not be perf issue to load all
-		r2, e := lookup(client, "/skydns/*", true)
+		n2, e := lookup(client, "/skydns/*", true)
 
-		if e != nil {
+		if (e != nil) {
 			return nil, e
 		}
 
         //look for most specific entry matching request path
-		best := bestMatch(wildcardPath(path), &r2.Node.Nodes)
+		best := bestMatch(wildcardPath(path), &n2.Nodes)
 		if (best == nil) {
-			return r, err //no match, return response from first lookup and this will result in proper "no such domain"
+			return n1, err //no match, return response from first lookup and this will result in proper "no such domain"
 		}
 
-		//Technically we do not need to lookup again as we already have all data in the return Node
-		//However, i am not sure how to create valid etcd.Response with meaningful Raft* and *Index values
-		//For now we will do third ETCD lookup.
-		//TODO: consider optimizing this to avoid extra lookup
-		return lookup(client, best.Key, recursive)
+		return best, nil
 	}
-	return r, err
+
+	return n1, err
 }
 
 //Hardcoding "/skydns" here is a bit ugly. Passing prefix and actual lookup string might be cleaner solution but it requires

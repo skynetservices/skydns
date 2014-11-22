@@ -416,20 +416,20 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 
 func (s *server) AddressRecords(q dns.Question, name string, previousRecords []dns.RR) (records []dns.RR, err error) {
 	path, star := msg.PathWithWildcard(name)
-	r, err := get(s.client, path, true)
+	n, err := get(s.client, path, true)
 	if err != nil {
 		return nil, err
 	}
-	if !r.Node.Dir { // single element
+	if !n.Dir { // single element
 		serv := new(msg.Service)
-		if err := json.Unmarshal([]byte(r.Node.Value), serv); err != nil {
+		if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
 			s.config.log.Infof("failed to parse json: %s", err.Error())
 			return nil, err
 		}
 		ip := net.ParseIP(serv.Host)
-		ttl := s.calculateTtl(r.Node, serv)
+		ttl := s.calculateTtl(n, serv)
 		serv.Ttl = ttl
-		serv.Key = r.Node.Key
+		serv.Key = n.Key
 		switch {
 		case ip == nil:
 			// Try to resolve as CNAME if it's not an IP.
@@ -461,7 +461,7 @@ func (s *server) AddressRecords(q dns.Question, name string, previousRecords []d
 		}
 		return records, nil
 	}
-	nodes, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
+	nodes, err := s.loopNodes(&n.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
 	if err != nil {
 		s.config.log.Infof("failed to parse json: %s", err.Error())
 		return nil, err
@@ -523,19 +523,19 @@ func (s *server) AddressRecords(q dns.Question, name string, previousRecords []d
 // NSRecords returns NS records from etcd.
 func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra []dns.RR, err error) {
 	path, star := msg.PathWithWildcard(name)
-	r, err := get(s.client, path, true)
+	n, err := get(s.client, path, true)
 	if err != nil {
 		return nil, nil, err
 	}
-	if !r.Node.Dir { // single element
+	if !n.Dir { // single element
 		serv := new(msg.Service)
-		if err := json.Unmarshal([]byte(r.Node.Value), serv); err != nil {
+		if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
 			s.config.log.Infof("failed to parse json: %s", err.Error())
 			return nil, nil, err
 		}
 		ip := net.ParseIP(serv.Host)
-		ttl := s.calculateTtl(r.Node, serv)
-		serv.Key = r.Node.Key
+		ttl := s.calculateTtl(n, serv)
+		serv.Key = n.Key
 		serv.Ttl = ttl
 		switch {
 		case ip == nil:
@@ -552,7 +552,7 @@ func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra
 		return records, extra, nil
 	}
 
-	sx, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
+	sx, err := s.loopNodes(&n.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
 	if err != nil || len(sx) == 0 {
 		return nil, nil, err
 	}
@@ -578,22 +578,22 @@ func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra
 // If the Target is not an name but an IP address, an name is created .
 func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
 	path, star := msg.PathWithWildcard(name)
-	r, err := get(s.client, path, true)
+	n, err := get(s.client, path, true)
 	if err != nil {
 		return nil, nil, err
 	}
-	if !r.Node.Dir { // single element
+	if !n.Dir { // single element
 		serv := new(msg.Service)
-		if err := json.Unmarshal([]byte(r.Node.Value), serv); err != nil {
+		if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
 			s.config.log.Infof("failed to parse json: %s", err.Error())
 			return nil, nil, err
 		}
 		ip := net.ParseIP(serv.Host)
-		ttl := s.calculateTtl(r.Node, serv)
+		ttl := s.calculateTtl(n, serv)
 		if serv.Priority == 0 {
 			serv.Priority = int(s.config.Priority)
 		}
-		serv.Key = r.Node.Key
+		serv.Key = n.Key
 		serv.Ttl = ttl
 		switch {
 		case ip == nil:
@@ -626,7 +626,7 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 		return records, extra, nil
 	}
 
-	sx, err := s.loopNodes(&r.Node.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
+	sx, err := s.loopNodes(&n.Nodes, strings.Split(msg.Path(name), "/"), star, nil)
 	if err != nil || len(sx) == 0 {
 		return nil, nil, err
 	}
@@ -690,19 +690,19 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 
 func (s *server) CNAMERecords(q dns.Question, name string) (records []dns.RR, err error) {
 	path, _ := msg.PathWithWildcard(name) // no wildcards here
-	r, err := get(s.client, path, true)
+	n, err := get(s.client, path, true)
 	if err != nil {
 		return nil, err
 	}
-	if !r.Node.Dir {
+	if !n.Dir {
 		serv := new(msg.Service)
-		if err := json.Unmarshal([]byte(r.Node.Value), serv); err != nil {
+		if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
 			s.config.log.Infof("failed to parse json: %s", err.Error())
 			return nil, err
 		}
 		ip := net.ParseIP(serv.Host)
-		ttl := s.calculateTtl(r.Node, serv)
-		serv.Key = r.Node.Key
+		ttl := s.calculateTtl(n, serv)
+		serv.Key = n.Key
 		serv.Ttl = ttl
 		if ip == nil {
 			records = append(records, serv.NewCNAME(q.Name, dns.Fqdn(serv.Host)))
@@ -717,24 +717,24 @@ func (s *server) PTRRecords(q dns.Question) (records []dns.RR, err error) {
 	if star {
 		return nil, fmt.Errorf("reverse can not contain wildcards")
 	}
-	r, err := get(s.client, path, false)
+	n, err := get(s.client, path, false)
 	if err != nil {
 		// if server has a forward, forward the query
 		return nil, err
 	}
-	if r.Node.Dir {
+	if n.Dir {
 		return nil, fmt.Errorf("reverse should not be a directory")
 	}
 	serv := new(msg.Service)
-	if err := json.Unmarshal([]byte(r.Node.Value), serv); err != nil {
+	if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
 		s.config.log.Infof("failed to parse json: %s", err.Error())
 		return nil, err
 	}
-	ttl := uint32(r.Node.TTL)
+	ttl := uint32(n.TTL)
 	if ttl == 0 {
 		ttl = s.config.Ttl
 	}
-	serv.Key = r.Node.Key
+	serv.Key = n.Key
 	// If serv.Host is parseble as a IP address we should not return anything.
 	// TODO(miek).
 	records = append(records, serv.NewPTR(q.Name, ttl))
