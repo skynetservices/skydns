@@ -19,6 +19,7 @@ SkyDNS2:
 * Is a thin layer above etcd, that translates etcd keys and values to the DNS.
     In the near future, SkyDNS2 will possibly be upstreamed and incorporated directly in etcd.
 * Does DNSSEC with NSEC3 instead of NSEC (Work in progress).
+* Supports [DNS wildcard records](http://en.wikipedia.org/wiki/Wildcard_DNS_record)
 
 Note that bugs in SkyDNS1 will still be fixed, but the main development effort will be focussed on version 2.
 [Version 1 of SkyDNS can be found here](https://github.com/skynetservices/skydns1).
@@ -214,7 +215,33 @@ Testing one of the names with `dig`:
     ;; ANSWER SECTION:
     1.rails.production.east.skydns.local. 3600 IN SRV 10 0 8080 service1.example.com.
 
-### Wildcards
+### Wildcard DNS records
+
+A [wildcard DNS record](http://en.wikipedia.org/wiki/Wildcard_DNS_record) is a record in a DNS zone
+that will match requests for non-existent domain names.
+
+SkyDNS treats all records provisioned under `/skydns/*/` as wildcard DNS records.
+(Regular non-wildcard records use `/skydns/` scope).
+
+For example, DNS entry for 2-node load balancer managing services in 'lb.example.com' domain can be added with:
+
+    curl -XPUT http://127.0.0.1:4001/v2/keys/skydns/*/com/example/lb/server1 \
+        -d value='{"host":"10.0.1.125","port":8080}'
+    curl -XPUT http://127.0.0.1:4001/v2/keys/skydns/*/com/example/lb/server2 \
+        -d value='{"host":"10.0.1.121","port":8080}'
+
+Testing one of the services:
+
+    % dig @localhost A  service.in.lb.example.com
+
+    ;; QUESTION SECTION:
+    ;service.in.lb.example.com.	IN	A
+
+    ;; ANSWER SECTION:
+    service.in.lb.example.com. 3600	IN	A	10.0.1.121
+    service.in.lb.example.com. 3600	IN	A	10.0.1.125
+
+### Wildcards in queries
 
 Of course using the full names isn't *that* useful, so SkyDNS lets you query for subdomains, and returns responses based upon the amount of services matched by the subdomain or from the wildcard query.
 
