@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	"errors"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -99,7 +98,7 @@ func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, erro
         //look for most specific entry matching request path
 		best := bestMatch(wildcardPath(path), &r2.Node.Nodes)
 		if (best == nil) {
-			return nil, errors.New("No match")
+			return r, err //no match, return response from first lookup and this will result in proper "no such domain"
 		}
 
 		//Technically we do not need to lookup again as we already have all data in the return Node
@@ -130,7 +129,7 @@ func wildcardPath(path string) string {
 func bestMatch(path string, nodes *etcd.Nodes) *etcd.Node {
 	for _, n := range *nodes {
 		//Need to match /com/example but not /com/example1. Thus use HasPrefix
-		if (n.Dir && path == n.Key || strings.HasPrefix(path, n.Key + "/")) {
+		if (n.Dir && (path == n.Key || strings.HasPrefix(path, n.Key + "/"))) {
 			if (isLeafDirectory(n)) {
 				return n
 			}
