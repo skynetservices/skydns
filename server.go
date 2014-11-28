@@ -14,11 +14,12 @@ import (
 	"sync"
 	"time"
 
+	"./cache"
+	"./msg"
+
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/coreos/go-systemd/activation"
 	"github.com/miekg/dns"
-	"github.com/skynetservices/skydns/cache"
-	"github.com/skynetservices/skydns/msg"
 )
 
 type server struct {
@@ -385,6 +386,17 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 			}
 		}
 		m.Answer = append(m.Answer, records...)
+	case dns.TypeTXT:
+		records, err := s.TXTRecords(q, name)
+		if err != nil {
+			if e, ok := err.(*etcd.EtcdError); ok {
+				if e.ErrorCode == 100 {
+					s.NameError(m, req)
+					return
+				}
+			}
+		}
+		m.Answer = append(m.Answer, records...)
 	default:
 		fallthrough // also catch other types, so that they return NODATA
 	case dns.TypeSRV, dns.TypeANY:
@@ -738,6 +750,26 @@ func (s *server) PTRRecords(q dns.Question) (records []dns.RR, err error) {
 	// If serv.Host is parseble as a IP address we should not return anything.
 	// TODO(miek).
 	records = append(records, serv.NewPTR(q.Name, ttl))
+	return records, nil
+}
+
+func (s *server) TXTRecords(q dns.Question, name string) (records []dns.RR, err error) {
+	path, _ := msg.PathWithWildcard(name) // no wildcards here
+	r, err := get(s.client, path, true)
+	if err != nil {
+		return nil, err
+	}
+	if !r.Node.Dir {
+		serv := new(msg.Service)
+		if err := json.Unmarshal([]byte(r.Node.Value), serv); err != nil {
+			s.config.log.Infof("failed to parse json: %s", err.Error())
+			return nil, err
+		}
+		ttl := s.calculateTtl(r.Node, serv)
+		serv.Key = r.Node.Key
+		serv.Ttl = ttl
+		records = append(records, serv.NewTXT(q.Name, ttl))
+	}
 	return records, nil
 }
 

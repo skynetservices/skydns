@@ -21,6 +21,7 @@ type Service struct {
 	Priority int    `json:"priority,omitempty"`
 	Weight   int    `json:"weight,omitempty"`
 	Ttl      uint32 `json:"ttl,omitempty"`
+	Text 		 string `json:"text,omitempty"`
 	// etcd key where we found this service and ignore from json un-/marshalling
 	Key string `json:"-"`
 }
@@ -54,6 +55,11 @@ func (s *Service) NewNS(name string, target string) *dns.NS {
 // NewPTR returns a new PTR record based on the Service.
 func (s *Service) NewPTR(name string, ttl uint32) *dns.PTR {
 	return &dns.PTR{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}, Ptr: dns.Fqdn(s.Host)}
+}
+
+// NewTXT returns a new TXT record based on the Service.
+func (s *Service) NewTXT(name string, ttl uint32) *dns.TXT {
+	return &dns.TXT{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: ttl}, Txt: strings.Split(s.Text, "\n") }
 }
 
 // As Path, but
