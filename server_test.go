@@ -31,17 +31,20 @@ func addService(t *testing.T, s *server, k string, ttl uint64, m *msg.Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, _ := msg.PathWithWildcard(k)
+	path := msg.Path(k)
 	t.Logf("Adding path %s:", path)
+
+	//data may exist from previos run, try to remove it first (ignore error if any)
+	s.client.Delete(path, false)
+
 	_, err = s.client.Create(path, string(b), ttl)
 	if err != nil {
-		// TODO(miek): allow for existing keys...
 		t.Fatal(err)
 	}
 }
 
 func delService(t *testing.T, s *server, k string) {
-	path, _ := msg.PathWithWildcard(k)
+	path := msg.Path(k)
 	_, err := s.client.Delete(path, false)
 	if err != nil {
 		t.Fatal(err)
@@ -377,6 +380,10 @@ var services = []*msg.Service{
 	// nameserver
 	{Host: "10.0.0.2", Key: "ns.dns.skydns.test."},
 	{Host: "10.0.0.3", Key: "ns2.dns.skydns.test."},
+	//wildcard DNS
+	{Host: "172.16.1.1", Port: 80,   Key: "101.lb.skydns.test.*."},
+	{Host: "172.16.1.2", Port: 8000, Key: "102.lb.skydns.test.*."},
+	{Host: "server3",    Port: 8080, Key: "103.lb.region.skydns.test.*."},
 }
 
 var dnsTestCases = []dnsTestCase{
@@ -713,6 +720,30 @@ var dnsTestCases = []dnsTestCase{
 		Qname: "local.dns.skydns.test.", Qtype: dns.TypeA,
 		Rcode: dns.RcodeServerFailure,
 		chaos: true,
+	},
+
+	// Wildcard DNS entry: basic match
+	{
+		Qname: "something.running.in.lb.region.skydns.test.", Qtype: dns.TypeSRV,
+		Answer: []dns.RR{newSRV("something.running.in.lb.region.skydns.test. 3600 SRV 10 100 8080 server3.")},
+	},
+
+	// Wildcard DNS entry: multiple servers
+	{
+		Qname: "something.running.in.lb.skydns.test.", Qtype: dns.TypeA,
+		Answer: []dns.RR{
+			newA("something.running.in.lb.skydns.test. 3600 A 172.16.1.1"),
+			newA("something.running.in.lb.skydns.test. 3600 A 172.16.1.2"),
+		},
+	},
+
+	// Wildcard DNS entry: do not allow partial match ("region" in data vs "reg" in query)
+	{
+		Qname: "something.running.in.lb.reg.skydns.test.", Qtype: dns.TypeA,
+		Rcode: dns.RcodeNameError,
+		Ns: []dns.RR{
+			newSOA("skydns.test. 3600 SOA ns.dns.skydns.test. hostmaster.skydns.test. 0 0 0 0 0"),
+		},
 	},
 }
 

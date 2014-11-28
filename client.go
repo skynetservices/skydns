@@ -65,9 +65,9 @@ func (s *server) UpdateClient(resp *etcd.Response) {
 	}
 }
 
-// get is a wrapper for client.Get that uses SingleInflight to suppress multiple
+// lookup is a wrapper for client.Get that uses SingleInflight to suppress multiple
 // outstanding queries.
-func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, error) {
+func lookup(client *etcd.Client, path string, recursive bool) (*etcd.Node, error) {
 	resp, err, _ := etcdInflight.Do(path, func() (*etcd.Response, error) {
 		r, e := client.Get(path, false, recursive)
 		if e != nil {
@@ -75,9 +75,72 @@ func get(client *etcd.Client, path string, recursive bool) (*etcd.Response, erro
 		}
 		return r, e
 	})
-	if err != nil {
-		return resp, err
+
+	if (resp == nil) {
+		return nil, err
 	}
+
 	// shared?
-	return resp, err
+	return resp.Node, err
+}
+
+// first, we look for entries matching incoming request
+// if this fails then check if there is a wildcard DNS entry for the subdomain of incoming request
+func get(client *etcd.Client, path string, recursive bool) (*etcd.Node, error) {
+	n1, err := lookup(client, path, recursive)
+
+	//no matching records => try wildcard dns
+	if (n1 == nil) {
+		//load all defined wildcard entries
+		//For most of use cases there will be one or two wild card DNS rules => this should not be perf issue to load all
+		n2, e := lookup(client, "/skydns/*", true)
+
+		if (e != nil) {
+			return nil, e
+		}
+
+        //look for most specific entry matching request path
+		best := bestMatch(wildcardPath(path), &n2.Nodes)
+		if (best == nil) {
+			return n1, err //no match, return response from first lookup and this will result in proper "no such domain"
+		}
+
+		return best, nil
+	}
+
+	return n1, err
+}
+
+//Hardcoding "/skydns" here is a bit ugly. Passing prefix and actual lookup string might be cleaner solution but it requires
+//   larger code refactoring and prefix is hardcoded in other places anyways.
+func wildcardPath(path string) string {
+	return strings.Replace(path, "/skydns", "/skydns/*", 1)
+}
+
+//find matching wildcard DNS entries.
+// Looking for leaf directory entry those key is prefix of lookup path
+//
+// Motivating example:
+//   if we have entry for *.a.example.com then it should match
+//     a.example.com
+//     x.a.example.com
+//     y.x.example.com
+//   but should not match
+//     b.example.com
+func bestMatch(path string, nodes *etcd.Nodes) *etcd.Node {
+	for _, n := range *nodes {
+		//Need to match /com/example but not /com/example1. Thus use HasPrefix
+		if (n.Dir && (path == n.Key || strings.HasPrefix(path, n.Key + "/"))) {
+			if (isLeafDirectory(n)) {
+				return n
+			}
+			return bestMatch(path, &n.Nodes)
+		}
+	}
+
+	return nil
+}
+
+func isLeafDirectory(n *etcd.Node) bool {
+	return n.Dir && n.Nodes.Len() != 0 && !n.Nodes[0].Dir
 }
