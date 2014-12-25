@@ -335,6 +335,11 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		m.Answer = append(m.Answer, records...)
 		m.Extra = append(m.Extra, extra...)
 	case dns.TypeA, dns.TypeAAAA:
+		if config.NetLookup {
+			records := s.NetLookup(w, req)
+			m.Answer = append(m.Answer, records...)
+		}
+
 		records, err := s.AddressRecords(q, name, nil)
 		if err != nil {
 			if e, ok := err.(*etcd.EtcdError); ok {
