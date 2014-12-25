@@ -50,6 +50,8 @@ type Config struct {
 	RCacheTtl int `json:"rcache_ttl,omitempty"`
 	// How many labels a name should have before we allow forwarding. Default to 2.
 	Ndots int `json:"ndot,omitempty"`
+	// Forward dns query if etcd key not exists
+	ForwardIfNoAnswer bool `json:"forward_no_ans,omitempty"`
 
 	// DNSSEC key material
 	PubKey       *dns.DNSKEY    `json:"-"`

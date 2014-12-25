@@ -64,6 +64,7 @@ func init() {
 	flag.BoolVar(&verbose, "verbose", false, "log queries")
 	flag.BoolVar(&config.Systemd, "systemd", false, "bind to socket(s) activated by systemd (ignore -addr)")
 	flag.BoolVar(&kubernetes, "kubernetes", false, "read endpoints from a kubernetes master")
+	flag.BoolVar(&config.ForwardIfNoAnswer, "forward-no-ans", false, "forward dns query if etcd key not exists")
 
 	// TTl
 	// Minttl

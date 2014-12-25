@@ -339,7 +339,11 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		if err != nil {
 			if e, ok := err.(*etcd.EtcdError); ok {
 				if e.ErrorCode == 100 {
-					s.NameError(m, req)
+					if config.ForwardIfNoAnswer {
+						s.ServeDNSForward(w, req)
+					} else {
+						s.NameError(m, req)
+					}
 					return
 				}
 			}
