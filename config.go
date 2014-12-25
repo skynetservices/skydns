@@ -50,6 +50,8 @@ type Config struct {
 	RCacheTtl int `json:"rcache_ttl,omitempty"`
 	// How many labels a name should have before we allow forwarding. Default to 2.
 	Ndots int `json:"ndot,omitempty"`
+	// Apply net lookup, use local hosts file(/etc/hosts) to resolve query
+	NetLookup bool `json:"netlookup,omitempty"`
 
 	// DNSSEC key material
 	PubKey       *dns.DNSKEY    `json:"-"`

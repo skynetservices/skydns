@@ -64,6 +64,7 @@ func init() {
 	flag.BoolVar(&verbose, "verbose", false, "log queries")
 	flag.BoolVar(&config.Systemd, "systemd", false, "bind to socket(s) activated by systemd (ignore -addr)")
 	flag.BoolVar(&kubernetes, "kubernetes", false, "read endpoints from a kubernetes master")
+	flag.BoolVar(&config.NetLookup, "netlookup", false, "apply netlookup to resolve query from local hosts file, e.g. /etc/hosts")
 
 	// TTl
 	// Minttl
