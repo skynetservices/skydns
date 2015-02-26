@@ -29,11 +29,19 @@ Note that bugs in SkyDNS1 will still be fixed, but the main development effort w
 ## Setup / Install
 Download/compile and run etcd. See the documentation for etcd at <https://github.com/coreos/etcd>.
 
+Install godep:
+
+    go get github.com/tools/godep
+
 Then get and compile SkyDNS:
 
-    go get github.com/skynetservices/skydns
     cd $GOPATH/src/github.com/skynetservices/skydns
+    godep restore
     go build -v
+
+Or:
+
+    godep get github.com/skynetservices/skydns
 
 SkyDNS' configuration is stored *in* etcd: but there are also flags and environment variabes
 you can set. To start SkyDNS, set the etcd machines with the environment variable ETCD_MACHINES:
