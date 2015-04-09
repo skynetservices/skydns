@@ -96,6 +96,10 @@ func PathWithWildcard(s string) (string, bool) {
 		if k == "*" {
 			return path.Join(append([]string{"/skydns/"}, l[:i]...)...), true
 		}
+		if strings.HasPrefix(k, "_") {
+			// escape leading _ to avoid etcd treating the key as hidden
+			l[i] = strings.Replace(k, "_", "%5F", 1)
+		}
 	}
 	return path.Join(append([]string{"/skydns/"}, l...)...), false
 }
@@ -107,6 +111,12 @@ func Path(s string) string {
 	for i, j := 0, len(l)-1; i < j; i, j = i+1, j-1 {
 		l[i], l[j] = l[j], l[i]
 	}
+	for i, k := range l {
+		if strings.HasPrefix(k, "_") {
+			// escape leading _ to avoid etcd treating the key as hidden
+			l[i] = strings.Replace(k, "_", "%5F", 1)
+		}
+	}
 	return path.Join(append([]string{"/skydns/"}, l...)...)
 }
 
@@ -116,6 +126,12 @@ func Domain(s string) string {
 	// start with 1, to strip /skydns
 	for i, j := 1, len(l)-1; i < j; i, j = i+1, j-1 {
 		l[i], l[j] = l[j], l[i]
+	}
+	for i, k := range l {
+		if strings.HasPrefix(k, "%5F") {
+			// un-escape etcd hidden key prefix
+			l[i] = strings.Replace(k, "%5F", "_", 1)
+		}
 	}
 	return dns.Fqdn(strings.Join(l[1:len(l)-1], "."))
 }

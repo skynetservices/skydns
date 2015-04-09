@@ -39,3 +39,25 @@ func TestSplit255(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func testDomainPath(t *testing.T, domain string, expected string) {
+	path := Path(domain)
+	if path != expected {
+		t.Logf("Path %s\n", domain)
+		t.Logf("%s %v\n", path, expected)
+		t.Fail()
+	}
+
+	roundtrip := Domain(path)
+	if roundtrip != domain + "." {
+		t.Logf("Domain %s\n", path)
+		t.Logf("%s %v\n", roundtrip, domain)
+		t.Fail()
+	}
+}
+
+
+func TestPath(t *testing.T) {
+	testDomainPath(t, "test.skydns.local", "/skydns/local/skydns/test")
+	testDomainPath(t, "_ldap._tcp.skydns.local", "/skydns/local/skydns/%5Ftcp/%5Fldap")
+}
