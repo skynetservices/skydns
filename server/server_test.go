@@ -556,6 +556,7 @@ type dnsTestCase struct {
 	Extra  []dns.RR
 }
 
+// Note the key is encoded as dns name, while in "reality" it is a Etcd path.
 var services = []*msg.Service{
 	{Host: "server1", Port: 8080, Key: "100.server1.development.region1.skydns.test."},
 	{Host: "server2", Port: 80, Key: "101.server2.production.region1.skydns.test."},
@@ -597,6 +598,7 @@ var services = []*msg.Service{
 	// duplicate ip address
 	{Host: "10.11.11.10", Key: "http.multiport.http.skydns.test.", Port: 80},
 	{Host: "10.11.11.10", Key: "https.multiport.http.skydns.test.", Port: 443},
+
 	// uppercase name
 	{Host: "127.0.0.1", Key: "upper.skydns.test.", Port: 443},
 
@@ -606,6 +608,16 @@ var services = []*msg.Service{
 	{Host: "a.ipaddr.skydns.test", Priority: 30, Mail: true, Key: "a.mx.skydns.test."},
 	// If this is added, we get a double CNAME, see issue #168
 	// {Host: "b.ipaddr.skydns.test", Mail: true, Key: "b.mx.skydns.test."},
+
+	// groups
+	{Host: "127.0.0.1", Key: "a.dom.skydns.test.", Group: "g1"},
+	{Host: "127.0.0.2", Key: "b.sub.dom.skydns.test.", Group: "g1"},
+
+	{Host: "127.0.0.1", Key: "a.dom2.skydns.test.", Group: "g1"},
+	{Host: "127.0.0.2", Key: "b.sub.dom2.skydns.test.", Group: ""},
+
+	{Host: "127.0.0.1", Key: "a.dom1.skydns.test.", Group: "g1"},
+	{Host: "127.0.0.2", Key: "b.sub.dom1.skydns.test.", Group: "g2"},
 }
 
 var dnsTestCases = []dnsTestCase{
@@ -1054,6 +1066,31 @@ var dnsTestCases = []dnsTestCase{
 		Extra: []dns.RR{
 			// not working yet.
 			newA("a.ipaddr.skydns.test. A 172.16.1.1"),
+		},
+	},
+
+	// Groups
+	{
+		// hits the group 'g1' and only includes those records
+		Qname: "dom.skydns.test.", Qtype: dns.TypeA,
+		Answer: []dns.RR{
+			newA("dom.skydns.test. IN A 127.0.0.1"),
+			newA("dom.skydns.test. IN A 127.0.0.2"),
+		},
+	},
+	{
+		// One has group, the other has not...  Include the non-group always.
+		Qname: "dom2.skydns.test.", Qtype: dns.TypeA,
+		Answer: []dns.RR{
+			newA("dom2.skydns.test. IN A 127.0.0.1"),
+			newA("dom2.skydns.test. IN A 127.0.0.2"),
+		},
+	},
+	{
+		// The groups differ.
+		Qname: "dom1.skydns.test.", Qtype: dns.TypeA,
+		Answer: []dns.RR{
+			newA("dom1.skydns.test. IN A 127.0.0.1"),
 		},
 	},
 }

@@ -164,6 +164,9 @@ values.
 * Text - text you want to add (this returned when doing a TXT query);
 * TTL - the time-to-live of the service, overriding the default TTL. If the etcd
   key also has a TTL, the minimum of this value and the etcd TTL is used.
+* TargetStrip - when synthesising a name for an IP only SRV record, take the path
+  name and strip `TargetStrip` labels from the ride hand side.
+* Group - limit recursion and only return services that share the Group's value.
 
 Path is the only mandatory field. The lookups into Etcd will be done with
 a *lower* cased path name.
@@ -528,8 +531,30 @@ In the example here, we don't use an UUID, we use `public.addresses`:
     ;; ANSWER SECTION:
     local.dns.skydns.local. 3600 IN  A   192.0.2.1
 
-The name `local.dns.skydns.local.` is fixed, i.e. you can retrieve the Host Local Value by
-querying for `local.dns.<your domain>`.
+The name `local.dns.skydns.local.` is fixed, i.e. you can retrieve the Host
+Local Value by querying for `local.dns.<your domain>`.
+
+
+#### Groups
+
+Groups can be used to group set of services together. The main use of this is to
+limit recursion, i.e. don't give back *all* records, but only a subset. Say that
+I have configuration like this:
+
+    /skydns/local/domain/
+    /skydns/local/domain/a - {"host": "127.0.0.1", "group": "g1"}
+    /skydns/local/domain/b - {"host": "127.0.0.2", "group": "g1"}
+    /skydns/local/domain/subdom/
+    /skydns/local/domain/subdom/c - {"host": "127.0.0.3", "group": "g2"}
+    /skydns/local/domain/subdom/d - {"host": "127.0.0.4", "group": "g2"}
+
+And you want `domain.local` to return (127.0.0.1 and 127.0.0.2) and
+`subdom.domain.local` to return (127.0.0.3 and 127.0.0.4). For this the two
+domains, need to be in different groups. What those groups are does not matter,
+as long as `a` and `b` belong to the same group which is *different* from the
+group `c` and `d` belong to. If a service is found *without* a group it is
+*always included*.
+
 
 ## Implementing a custom DNS backend
 
@@ -655,6 +680,12 @@ it makes up:
 
     ;; ADDITIONAL SECTION:
     bar.skydns.local. 3600    IN  A   192.168.0.1
+
+
+## How do you limit recursion?
+
+By default SkyDNS will returns *all* records under a name. Suppose you want we have
+`bar.skydns.local`... TODO.
 
 
 # Docker

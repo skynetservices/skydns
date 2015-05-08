@@ -31,6 +31,11 @@ type Service struct {
 	// DNS name.
 	TargetStrip int `json:"targetstrip",omitempty"`
 
+	// Group is used to group (or *not* to group) different services
+	// together. Services with an identical Group are returned in the same
+	// answer.
+	Group string `json:"group,omitempty"`
+
 	// Etcd key where we found this service and ignored from json un-/marshalling
 	Key string `json:"-"`
 }
@@ -101,11 +106,11 @@ func (s *Service) NewPTR(name string, ttl uint32) *dns.PTR {
 	return &dns.PTR{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}, Ptr: dns.Fqdn(s.Host)}
 }
 
-// As Path, but
-// if a name contains wildcards (*), the name will be chopped of before the (first) wildcard, and
-// we do a highler evel search and later find the matching names.
-// So service.*.skydns.local, will look for all services under skydns.local and will later check
-// for names that match service.*.skydns.local.  If a wildcard is found the returned bool is true.
+// As Path, but if a name contains wildcards (*), the name will be chopped of
+// before the (first) wildcard, and we do a highler evel search and later find
+// the matching names.  So service.*.skydns.local, will look for all services
+// under skydns.local and will later check for names that match
+// service.*.skydns.local.  If a wildcard is found the returned bool is true.
 func PathWithWildcard(s string) (string, bool) {
 	l := dns.SplitDomainName(s)
 	for i, j := 0, len(l)-1; i < j; i, j = i+1, j-1 {
@@ -137,6 +142,54 @@ func Domain(s string) string {
 		l[i], l[j] = l[j], l[i]
 	}
 	return dns.Fqdn(strings.Join(l[1:len(l)-1], "."))
+}
+
+// Group checks the services in sx, it looks for a Group attribute on the shortest
+// keys. If there are multiple shortest keys *and* the group attribute disagrees (and
+// is not empty), we don't consider it a group.
+func Group(sx []Service) []Service {
+	if len(sx) == 0 {
+		return sx
+	}
+
+	// Shortest key with group attribute sets the group for this set.
+	group := sx[0].Group
+	slashes := strings.Count(sx[0].Key, "/")
+	length := make([]int, len(sx))
+	for i, s := range sx {
+		x := strings.Count(s.Key, "/")
+		length[i] = x
+		if x < slashes {
+			if s.Group == "" {
+				break
+			}
+			slashes = x
+			group = s.Group
+		}
+	}
+
+	if group == "" {
+		return sx
+	}
+
+	ret := []Service{} // with slice-tricks in sx we can prolly save this allocation (TODO)
+
+	for i, s := range sx {
+		if s.Group == "" {
+			ret = append(ret, s)
+			continue
+		}
+
+		// Disagreement on the same level
+		if length[i] == slashes && s.Group != group {
+			return sx
+		}
+
+		if s.Group == group {
+			ret = append(ret, s)
+		}
+	}
+	return ret
 }
 
 // Split255 splits a string into 255 byte chunks.
