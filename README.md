@@ -699,11 +699,22 @@ Official Docker images are at the [Docker Hub](https://registry.hub.docker.com/u
 * master -> skynetservices/skydns:latest
 * latest tag -> skynetservices/skydns:latest-tagged
 
-The supplied `Dockerfile` can be used to build an image as well. Build SkyDNS and then
-build the docker image:
+Building the SkyDNS Docker images will be done using GO cross compiling to static
+GO binaries. To build the Docker images just use the supplied build script:
 
-    % go build
-    % docker build -t $USER/skydns .
+    % ./docker-builder/build.sh
+
+As a first step, a complete Docker builder image will be created. For subsequent
+builds you can skip this step with:
+
+    % SKIP_BUILD=1 ./docker-builder/build.sh
+
+The created Docker images are extremely small in size due to the fact that we just
+use a statically compiled GO binary inside the Docker image:
+
+    % docker images | grep skydns
+    skydns-armv6l       latest              fd08790bc973        Less than a second ago   6.806 MB
+    skydns              latest              4da909d03f4a        2 seconds ago            8.437 MB
 
 If you run it, SkyDNS needs to access Etcd (or whatever backend), which usually
 runs on the host server (i.e. when using CoreOS), to make that work, just run:
