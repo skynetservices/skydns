@@ -39,6 +39,7 @@ func NewBackend(client *etcd.Client, config *Config) *Backend {
 }
 
 func (g *Backend) Records(name string, exact bool) ([]msg.Service, error) {
+	etcd.GetLogger().Printf("backend call Records(%q)", name)
 	path, star := msg.PathWithWildcard(name)
 	r, err := g.get(path, true)
 	if err != nil {
@@ -56,6 +57,7 @@ func (g *Backend) Records(name string, exact bool) ([]msg.Service, error) {
 }
 
 func (g *Backend) ReverseRecord(name string) (*msg.Service, error) {
+	etcd.GetLogger().Printf("backend call ReverseRecord(%q)", name)
 	path, star := msg.PathWithWildcard(name)
 	if star {
 		return nil, fmt.Errorf("reverse can not contain wildcards")
@@ -117,6 +119,15 @@ func (g *Backend) loopNodes(n *etcd.Nodes, nameParts []string, star bool, bx map
 	}
 Nodes:
 	for _, n := range *n {
+		if !star && strings.HasSuffix(n.Key, "/@") {
+			serv, err := g.decode(n)
+			if err != nil {
+				return nil, err
+			}
+			sx = []msg.Service{*serv}
+			return sx, nil
+		}
+
 		if n.Dir {
 			nodes, err := g.loopNodes(&n.Nodes, nameParts, star, bx)
 			if err != nil {
@@ -125,6 +136,7 @@ Nodes:
 			sx = append(sx, nodes...)
 			continue
 		}
+
 		if star {
 			keyParts := strings.Split(n.Key, "/")
 			for i, n := range nameParts {
@@ -140,24 +152,36 @@ Nodes:
 				}
 			}
 		}
-		serv := new(msg.Service)
-		if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
+
+		serv, err := g.decode(n)
+		if err != nil {
 			return nil, err
 		}
+
 		b := bareService{serv.Host, serv.Port, serv.Priority, serv.Weight, serv.Text}
 		if _, ok := bx[b]; ok {
 			continue
 		}
 		bx[b] = true
 
-		serv.Key = n.Key
-		serv.Ttl = g.calculateTtl(n, serv)
-		if serv.Priority == 0 {
-			serv.Priority = int(g.config.Priority)
-		}
 		sx = append(sx, *serv)
 	}
 	return sx, nil
+}
+
+func (g *Backend) decode(n *etcd.Node) (*msg.Service, error) {
+	serv := new(msg.Service)
+	if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
+		return nil, err
+	}
+
+	serv.Key = n.Key
+	serv.Ttl = g.calculateTtl(n, serv)
+	if serv.Priority == 0 {
+		serv.Priority = int(g.config.Priority)
+	}
+
+	return serv, nil
 }
 
 // calculateTtl returns the smaller of the etcd TTL and the service's
