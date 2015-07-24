@@ -82,8 +82,8 @@ func New(backend Backend, config *Config) *server {
 		group:        new(sync.WaitGroup),
 		scache:       cache.New(config.SCache, 0),
 		rcache:       cache.New(config.RCache, config.RCacheTtl),
-		dnsUDPclient: &dns.Client{Net: "udp", ReadTimeout: 2 * config.ReadTimeout, WriteTimeout: 2 * config.ReadTimeout, SingleInflight: true},
-		dnsTCPclient: &dns.Client{Net: "tcp", ReadTimeout: 2 * config.ReadTimeout, WriteTimeout: 2 * config.ReadTimeout, SingleInflight: true},
+		dnsUDPclient: &dns.Client{Net: config.UdpNetwork, ReadTimeout: 2 * config.ReadTimeout, WriteTimeout: 2 * config.ReadTimeout, SingleInflight: true},
+		dnsTCPclient: &dns.Client{Net: config.TcpNetwork, ReadTimeout: 2 * config.ReadTimeout, WriteTimeout: 2 * config.ReadTimeout, SingleInflight: true},
 	}
 }
 
@@ -121,7 +121,7 @@ func (s *server) Run() error {
 						log.Fatalf("skydns: %s", err)
 					}
 				}()
-				dnsReadyMsg(u.LocalAddr().String(), "udp")
+				dnsReadyMsg(u.LocalAddr().String(), s.config.UdpNetwork)
 			}
 		}
 		for _, l := range listeners {
@@ -133,26 +133,26 @@ func (s *server) Run() error {
 						log.Fatalf("skydns: %s", err)
 					}
 				}()
-				dnsReadyMsg(t.Addr().String(), "tcp")
+				dnsReadyMsg(t.Addr().String(), s.config.TcpNetwork)
 			}
 		}
 	} else {
 		s.group.Add(1)
 		go func() {
 			defer s.group.Done()
-			if err := dns.ListenAndServe(s.config.DnsAddr, "tcp", mux); err != nil {
+			if err := dns.ListenAndServe(s.config.DnsAddr, s.config.TcpNetwork, mux); err != nil {
 				log.Fatalf("skydns: %s", err)
 			}
 		}()
-		dnsReadyMsg(s.config.DnsAddr, "tcp")
+		dnsReadyMsg(s.config.DnsAddr, s.config.TcpNetwork)
 		s.group.Add(1)
 		go func() {
 			defer s.group.Done()
-			if err := dns.ListenAndServe(s.config.DnsAddr, "udp", mux); err != nil {
+			if err := dns.ListenAndServe(s.config.DnsAddr, s.config.UdpNetwork, mux); err != nil {
 				log.Fatalf("skydns: %s", err)
 			}
 		}()
-		dnsReadyMsg(s.config.DnsAddr, "udp")
+		dnsReadyMsg(s.config.DnsAddr, s.config.UdpNetwork)
 	}
 
 	s.group.Wait()
