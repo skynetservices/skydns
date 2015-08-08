@@ -8,7 +8,7 @@ RUN export GOPATH="/go" && go get github.com/skynetservices/skydns && cd $GOPATH
 RUN mv /go/bin/skydns /bin
 RUN rm -rvf /go
 
-RUN apk del git mercurial go build-base
+RUN apk del --purge git mercurial go build-base
 
 EXPOSE 53 53/udp
 ENTRYPOINT ["/bin/skydns"]
