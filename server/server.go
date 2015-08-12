@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,6 +75,11 @@ func (g FirstBackend) ReverseRecord(name string) (record *msg.Service, err error
 
 // New returns a new SkyDNS server.
 func New(backend Backend, config *Config) *server {
+	if config.Verbose {
+		log.Print("set go-etcd logger output to os.Stdout")
+		etcd.SetLogger(log.New(os.Stdout, "go-etcd: ", log.LstdFlags))
+	}
+
 	return &server{
 		backend: backend,
 		config:  config,
@@ -281,6 +287,10 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	}
 
 	if q.Qclass != dns.ClassCHAOS && !strings.HasSuffix(name, s.config.Domain) {
+		if s.config.Verbose {
+			log.Printf("skydns: %q is not sub of %q, forwarding...", name, s.config.Domain)
+		}
+
 		resp := s.ServeDNSForward(w, req)
 		metricSizeAndDuration(resp, start, tcp)
 		return
@@ -411,6 +421,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	switch q.Qtype {
 	case dns.TypeNS:
 		if name != s.config.Domain {
+			log.Printf("skydns: %q unmatch default domain", name)
 			break
 		}
 		// Lookup s.config.DnsDomain
@@ -650,6 +661,7 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 			lookup[srv.Target] = true
 
 			if !dns.IsSubDomain(s.config.Domain, srv.Target) {
+				log.Printf("skydns: target %q is not sub of %q, looking up...", srv.Target, s.config.Domain)
 				m1, e1 := s.Lookup(srv.Target, dns.TypeA, bufsize, dnssec)
 				if e1 == nil {
 					extra = append(extra, m1.Answer...)
