@@ -280,7 +280,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 
-	if q.Qclass != dns.ClassCHAOS && !strings.HasSuffix(name, s.config.Domain) {
+	if s.shouldForward(q) {
 		resp := s.ServeDNSForward(w, req)
 		metricSizeAndDuration(resp, start, tcp)
 		return
@@ -507,6 +507,19 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		m.Ns = []dns.RR{s.NewSOA()}
 		m.Ns[0].Header().Ttl = s.config.MinTtl
 	}
+}
+
+func (s *server) shouldForward(q dns.Question) bool {
+	if q.Qclass == dns.ClassCHAOS {
+		return false
+	}
+	if !strings.HasSuffix(strings.ToLower(q.Name), s.config.Domain) {
+		return true
+	}
+	if s.config.ForwardLocal {
+		return true
+	}
+	return false
 }
 
 func (s *server) AddressRecords(q dns.Question, name string, previousRecords []dns.RR, bufsize uint16, dnssec, both bool) (records []dns.RR, err error) {

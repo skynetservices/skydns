@@ -153,6 +153,65 @@ func TestDNSForward(t *testing.T) {
 	}
 }
 
+func TestDNSForwardLocal(t *testing.T) {
+	forwardServer := newTestServer(t, false)
+	service := &msg.Service{
+		Host: "199.43.132.53", Key: "a.skydns.test.",
+	}
+	addService(t, forwardServer, service.Key, 0, service)
+	defer delService(t, forwardServer, service.Key)
+
+	s := newTestServer(t, false)
+	s.config.Nameservers = []string{forwardServer.config.DnsAddr}
+	s.config.ForwardLocal = true
+	defer s.Stop()
+
+	c := new(dns.Client)
+	m := new(dns.Msg)
+	m.SetQuestion("a.skydns.test.", dns.TypeA)
+	resp, _, err := c.Exchange(m, "127.0.0.1:"+StrPort)
+	if err != nil {
+		// try twice
+		resp, _, err = c.Exchange(m, "127.0.0.1:"+StrPort)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(resp.Answer) == 0 || resp.Rcode != dns.RcodeSuccess {
+		t.Fatal("answer expected to have A records or rcode not equal to RcodeSuccess")
+	}
+	// TCP
+	c.Net = "tcp"
+	resp, _, err = c.Exchange(m, "127.0.0.1:"+StrPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Answer) == 0 || resp.Rcode != dns.RcodeSuccess {
+		t.Fatal("answer expected to have A records or rcode not equal to RcodeSuccess")
+	}
+
+	m.SetQuestion("bbbbb.skydns.test.", dns.TypeA)
+	resp, _, err = c.Exchange(m, "127.0.0.1:"+StrPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Answer) != 0 {
+		t.Fatal("answer expected to have zero A records")
+	}
+
+	// disable recursion and check
+	s.config.NoRec = true
+
+	m.SetQuestion("a.skydns.test.", dns.TypeA)
+	resp, _, err = c.Exchange(m, "127.0.0.1:"+StrPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Rcode != dns.RcodeServerFailure {
+		t.Fatal("answer expected to have rcode equal to RcodeFailure")
+	}
+}
+
 func TestDNSStubForward(t *testing.T) {
 	s := newTestServer(t, false)
 	defer s.Stop()
