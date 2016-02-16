@@ -418,7 +418,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 }
 
 func (s *server) AddressRecords(q dns.Question, name string, previousRecords []dns.RR, bufsize uint16, dnssec, both bool) (records []dns.RR, err error) {
-	services, err := s.backend.Records(name, false)
+	services, err := s.backend.Records(name, s.config.ExactMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +483,7 @@ func (s *server) AddressRecords(q dns.Question, name string, previousRecords []d
 
 // NSRecords returns NS records from etcd.
 func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra []dns.RR, err error) {
-	services, err := s.backend.Records(name, false)
+	services, err := s.backend.Records(name, s.config.ExactMatch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -511,7 +511,7 @@ func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra
 // SRVRecords returns SRV records from etcd.
 // If the Target is not a name but an IP address, a name is created.
 func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
-	services, err := s.backend.Records(name, false)
+	services, err := s.backend.Records(name, s.config.ExactMatch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -596,7 +596,7 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 // MXRecords returns MX records from etcd.
 // If the Target is not a name but an IP address, a name is created.
 func (s *server) MXRecords(q dns.Question, name string, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
-	services, err := s.backend.Records(name, false)
+	services, err := s.backend.Records(name, s.config.ExactMatch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -670,7 +670,7 @@ func (s *server) CNAMERecords(q dns.Question, name string) (records []dns.RR, er
 }
 
 func (s *server) TXTRecords(q dns.Question, name string) (records []dns.RR, err error) {
-	services, err := s.backend.Records(name, false)
+	services, err := s.backend.Records(name, s.config.ExactMatch)
 	if err != nil {
 		return nil, err
 	}
