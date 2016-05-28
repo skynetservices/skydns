@@ -6,7 +6,6 @@ go:
 
 install:
   - go get github.com/coreos/etcd
-  - go get github.com/coreos/go-etcd/etcd
   - go get github.com/coreos/go-systemd/activation
   - go get github.com/miekg/dns
   - go get github.com/rcrowley/go-metrics
