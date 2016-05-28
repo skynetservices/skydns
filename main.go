@@ -175,8 +175,7 @@ func loadConfig(client etcd.KeysAPI, config *server.Config) error {
 	configPath := "/" + msg.PathPrefix + "/config"
 	resp, err := client.Get(ctx, configPath, nil)
 	if err != nil {
-		log.Printf("skydns: falling back to default configuration, could not read from etcd: %s", err)
-		return nil
+		return fmt.Errorf("could not read from etcd: %s", err)
 	}
 	if err := json.Unmarshal([]byte(resp.Node.Value), config); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %s", err.Error())
