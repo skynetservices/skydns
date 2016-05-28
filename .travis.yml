@@ -9,6 +9,8 @@ go:
   - 1.5
   - 1.6
 
+go_import_path: github.com/skynetservices/skydns
+
 install:
   - go get github.com/coreos/etcd
   - go get github.com/coreos/go-systemd/activation
