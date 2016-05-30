@@ -17,7 +17,7 @@ has seen some changes, most notably the ability to use etcd as a backend.
 SkyDNS2:
 
 * Does away with Raft and uses etcd (which uses raft).
-* Makes is possible to query arbitrary domain names.
+* Makes it possible to query arbitrary domain names.
 * Is a thin layer above etcd, that translates etcd keys and values to the DNS.
 * Does DNSSEC with NSEC3 instead of NSEC.
 
