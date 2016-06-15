@@ -174,8 +174,10 @@ func loadConfig(client etcd.KeysAPI, config *server.Config) error {
 	// Override what isn't set yet from the command line.
 	configPath := "/" + msg.PathPrefix + "/config"
 	resp, err := client.Get(ctx, configPath, nil)
-	if err != nil {
-		return fmt.Errorf("could not read from etcd: %s", err)
+	for err != nil {
+		fmt.Printf("could not read from etcd: %s\n", err)
+		time.Sleep(10 * time.Second)
+		resp, err = client.Get(ctx, configPath, nil)
 	}
 	if err := json.Unmarshal([]byte(resp.Node.Value), config); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %s", err.Error())
