@@ -32,6 +32,8 @@ var (
 	tlskey     = ""
 	tlspem     = ""
 	cacert     = ""
+	username   = ""
+	password   = ""
 	config     = &server.Config{ReadTimeout: 0, Domain: "", DnsAddr: "", DNSSEC: ""}
 	nameserver = ""
 	machine    = ""
@@ -66,6 +68,8 @@ func init() {
 	flag.StringVar(&tlskey, "tls-key", env("ETCD_TLSKEY", ""), "SSL key file used to secure etcd communication")
 	flag.StringVar(&tlspem, "tls-pem", env("ETCD_TLSPEM", ""), "SSL certification file used to secure etcd communication")
 	flag.StringVar(&cacert, "ca-cert", env("ETCD_CACERT", ""), "SSL Certificate Authority file used to secure etcd communication")
+	flag.StringVar(&username, "username", env("ETCD_USERNAME", ""), "Username used to support etcd basic auth")
+	flag.StringVar(&password, "password", env("ETCD_PASSWORD", ""), "Password used to support etcd basic auth")
 	flag.DurationVar(&config.ReadTimeout, "rtimeout", 2*time.Second, "read timeout")
 	flag.BoolVar(&config.RoundRobin, "round-robin", true, "round robin A/AAAA replies")
 	flag.BoolVar(&config.NSRotate, "ns-rotate", true, "round robin selection of nameservers from among those listed")
@@ -95,7 +99,7 @@ func main() {
 	}
 
 	machines := strings.Split(machine, ",")
-	client, err := newEtcdClient(machines, tlspem, tlskey, cacert)
+	client, err := newEtcdClient(machines, tlspem, tlskey, cacert, username, password)
 	if err != nil {
 		panic(err)
 	}
@@ -197,7 +201,7 @@ func validateHostPort(hostPort string) error {
 	return nil
 }
 
-func newEtcdClient(machines []string, certFile, keyFile, caFile string) (etcd.KeysAPI, error) {
+func newEtcdClient(machines []string, certFile, keyFile, caFile, username, password string) (etcd.KeysAPI, error) {
 	t, err := newHTTPSTransport(certFile, keyFile, caFile)
 	if err != nil {
 		return nil, err
@@ -206,6 +210,8 @@ func newEtcdClient(machines []string, certFile, keyFile, caFile string) (etcd.Ke
 	cli, err := etcd.New(etcd.Config{
 		Endpoints: machines,
 		Transport: t,
+		Username:  username,
+		Password:  password,
 	})
 	if err != nil {
 		return nil, err
