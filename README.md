@@ -121,6 +121,8 @@ SkyDNS uses these environment variables:
 * `ETCD_TLSKEY` - path of TLS client certificate - private key. Overwrite with `-tls-key` string flag.
 * `ETCD_TLSPEM` - path of TLS client certificate - public key. Overwrite with `-tls-pem` string flag.
 * `ETCD_CACERT` - path of TLS certificate authority public key. Overwrite with `-ca-cert` string flag.
+* `ETCD_USERNAME` - username used for basic auth. Overwrite with `-username` string flag.
+* `ETCD_PASSWORD` - password used for basic auth. Overwrite with `-password` string flag.
 * `SKYDNS_ADDR` - specify address to bind to. Overwrite with `-addr` string flag.
 * `SKYDNS_DOMAIN` - set a default domain if not specified by etcd config. Overwrite with `-domain` string flag.
 * `SKYDNS_NAMESERVERS` - set a list of nameservers to forward DNS requests to
