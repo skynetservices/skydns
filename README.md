@@ -79,6 +79,7 @@ SkyDNS' configuration is stored in etcd as a JSON object under the key
 * `scache`: the capacity of the DNSSEC signature cache, defaults to 10000 signatures if not set.
 * `rcache`: the capacity of the response cache, defaults to 0 messages if not set.
 * `rcache_ttl`: the TTL of the response cache, defaults to 60 if not set.
+* `ndots`: how many labels a name should have before we allow forwarding. Default to 2.
 * `systemd`: bind to socket(s) activated by systemd (ignores -addr).
 * `path-prefix`: backend(etcd) path prefix, defaults to skydns (i.e. if it is set to `mydns`, the SkyDNS's configuration object should be stored under the key `/mydns/config`).
 
@@ -129,6 +130,7 @@ SkyDNS uses these environment variables:
   when not authoritative for a domain, "8.8.8.8:53,8.8.4.4:53". Overwrite with `-nameservers` string flag.
 * `SKYDNS_PATH_PREFIX` - backend(etcd) path prefix, defaults to skydns (i.e. if it is set to `mydns`, the SkyDNS's configuration object should be stored under the key `/mydns/config`). Overwrite with `-path-prefix` string flag.
 * `SKYDNS_SYSTEMD`: set to `true` to bind to socket(s) activated by systemd (ignores SKYDNS_ADDR). Overwrite with `-systemd` bool flag.
+* `SKYDNS_NDOTS`: how many labels a name should have before we allow forwarding. Default to 2.
 
 For [Prometheus](http://prometheus.io/) the following environment variables
 are available:

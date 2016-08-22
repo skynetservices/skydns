@@ -19,6 +19,7 @@ const (
 	SCacheCapacity = 10000
 	RCacheCapacity = 100000
 	RCacheTtl      = 60
+	Ndots          = 2
 )
 
 // Config provides options to the SkyDNS resolver.
@@ -112,7 +113,7 @@ func SetDefaults(config *Config) error {
 		config.RCacheTtl = RCacheTtl
 	}
 	if config.Ndots <= 0 {
-		config.Ndots = 2
+		config.Ndots = Ndots
 	}
 
 	if len(config.Nameservers) == 0 {

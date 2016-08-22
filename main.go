@@ -48,6 +48,15 @@ func env(key, def string) string {
 	return def
 }
 
+func intEnv(key string, def int) int {
+	if x := os.Getenv(key); x != "" {
+		if v, err := strconv.ParseInt(x, 10, 0); err == nil {
+			return int(v)
+		}
+	}
+	return def
+}
+
 func boolEnv(key string, def bool) bool {
 	if x := os.Getenv(key); x != "" {
 		if v, err := strconv.ParseBool(x); err == nil {
@@ -86,6 +95,9 @@ func init() {
 	flag.IntVar(&config.SCache, "scache", server.SCacheCapacity, "capacity of the signature cache")
 	flag.IntVar(&config.RCache, "rcache", 0, "capacity of the response cache") // default to 0 for now
 	flag.IntVar(&config.RCacheTtl, "rcache-ttl", server.RCacheTtl, "TTL of the response cache")
+
+	// Ndots
+	flag.IntVar(&config.Ndots, "ndots", intEnv("SKYDNS_NDOTS", server.Ndots), "How many labels a name should have before we allow forwarding")
 
 	flag.StringVar(&msg.PathPrefix, "path-prefix", env("SKYDNS_PATH_PREFIX", "skydns"), "backend(etcd) path prefix, default: skydns")
 }
