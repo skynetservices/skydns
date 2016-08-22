@@ -4,7 +4,7 @@
 
 package server
 
-// etcd needs to be running on http://127.0.0.1:4001
+// etcd needs to be running on http://127.0.0.1:2379
 
 import (
 	"crypto/rsa"
@@ -60,7 +60,7 @@ func newTestServer(t *testing.T, c bool) *server {
 	StrPort = strconv.Itoa(Port)
 	s := new(server)
 	client, _ := etcd.New(etcd.Config{
-		Endpoints: []string{"http://127.0.0.1:4001/"},
+		Endpoints: []string{"http://127.0.0.1:2379/"},
 		Transport: etcd.DefaultTransport,
 	})
 	kapi := etcd.NewKeysAPI(client)
@@ -699,8 +699,8 @@ var dnsTestCases = []dnsTestCase{
 			newSRV("*.cname2.skydns.test. 3600 IN SRV 10 100 0 www.miek.nl."),
 		},
 		Extra: []dns.RR{
-			newA("a.miek.nl. 3600 IN A 139.162.196.78"),
-			newAAAA("a.miek.nl. 3600 IN AAAA 2a01:7e00::f03c:91ff:fef1:6735"),
+			newA("a.miek.nl. 3600 IN A 176.58.119.54"),
+			newAAAA("a.miek.nl. 3600 IN AAAA 2a01:7e00::f03c:91ff:fe79:234c"),
 			newCNAME("www.miek.nl. 3600 IN CNAME a.miek.nl."),
 		},
 	},
@@ -741,7 +741,7 @@ var dnsTestCases = []dnsTestCase{
 	{
 		Qname: "external1.cname.skydns.test.", Qtype: dns.TypeA,
 		Answer: []dns.RR{
-			newA("a.miek.nl. 60 IN A 139.162.196.78"),
+			newA("a.miek.nl. 60 IN A 176.58.119.54"),
 			newCNAME("external1.cname.skydns.test. 60 IN CNAME www.miek.nl."),
 			newCNAME("www.miek.nl. 60 IN CNAME a.miek.nl."),
 		},

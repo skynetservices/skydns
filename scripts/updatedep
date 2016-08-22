@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# A script for updating godep dependencies for the vendored directory.
+#
+# update depedency
+# 1. edit glide.yaml with version, git SHA
+# 2. run ./scripts/updatedep
+# 3. it automatically detects new git SHA, and vendors updates to cmd/vendor directory
+#
+# add depedency
+# 1. run ./scripts/updatedep.sh github.com/USER/PROJECT#^1.0.0
+#        OR
+#        ./scripts/updatedep.sh github.com/USER/PROJECT#9b772b54b3bf0be1eec083c9669766a56332559a
+# 2. make sure glide.yaml and glide.lock are updated
+
+CDIR=$(cd `dirname "$0"`/.. && pwd)
+cd "$CDIR"
+
+rm -rf vendor
+
+GLIDE_ROOT=$GOPATH/src/github.com/Masterminds/glide
+export GOPATH="${CDIR}/gopath"
+export PATH="${PATH}:${GOPATH}/bin"
+
+if ! which glide > /dev/null ; then
+  go get -v -u github.com/Masterminds/glide
+fi
+if ! which glide-vc > /dev/null ; then
+  go get -v -u github.com/sgotti/glide-vc
+fi
+
+GLIDE_ROOT=$GOPATH/src/github.com/Masterminds/glide
+GLIDE_SHA=3e49dce57f4a3a1e9bc55475065235766000d2f0
+pushd "${GLIDE_ROOT}"
+	git reset --hard ${GLIDE_SHA}
+	go install
+popd
+
+if [ -n "$1" ]; then
+	echo "glide get on $(echo $1)"
+	glide --verbose get --strip-vendor --strip-vcs --update-vendored --skip-test $1
+else
+	echo "glide update on *"
+	glide --verbose update --delete --strip-vendor --strip-vcs --update-vendored --skip-test
+fi;
+
+echo "removing test files"
+glide vc --only-code --no-tests
+
+echo "done"

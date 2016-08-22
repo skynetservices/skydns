@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -e
+
+CDIR=$(cd `dirname "$0"`/.. && pwd)
+cd "$CDIR"
+
+ORG_PATH="github.com/skynetservices"
+REPO_PATH="${ORG_PATH}/skydns"
+
+if [ ! $(command -v go 2>/dev/null) ]; then
+  echo "build: failed to locate Go binaries."
+  exit 1
+fi
+
+if [ ! -h gopath/src/${REPO_PATH} ]; then
+  mkdir -p gopath/src/${ORG_PATH}
+  ln -s ../../../.. gopath/src/${REPO_PATH} || exit 255
+fi
+
+export GO15VENDOREXPERIMENT=1
+export GOPATH="${CDIR}/gopath"
+eval $(go env)
+
+echo "Building skydns..."
+cd gopath/src/${REPO_PATH}
+GOOS=linux go build -a -tags netgo -installsuffix netgo
