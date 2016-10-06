@@ -248,6 +248,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	metrics.ReportCacheMiss(metrics.Response)
 
 	defer func() {
+		metrics.ReportRequestCount(req, metrics.Auth)
 		metrics.ReportDuration(m, start, metrics.Auth)
 		metrics.ReportErrorCount(m, metrics.Auth)
 
