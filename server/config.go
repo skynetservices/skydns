@@ -59,6 +59,8 @@ type Config struct {
 	RCacheTtl int `json:"rcache_ttl,omitempty"`
 	// How many labels a name should have before we allow forwarding. Default to 2.
 	Ndots int `json:"ndot,omitempty"`
+	// EtcdVersion, the version supported during skydns' run. Default to 2.
+	EtcdVersion int
 
 	// DNSSEC key material
 	PubKey  *dns.DNSKEY   `json:"-"`

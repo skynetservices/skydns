@@ -82,6 +82,7 @@ SkyDNS' configuration is stored in etcd as a JSON object under the key
 * `ndots`: how many labels a name should have before we allow forwarding. Default to 2.
 * `systemd`: bind to socket(s) activated by systemd (ignores -addr).
 * `path-prefix`: backend(etcd) path prefix, defaults to skydns (i.e. if it is set to `mydns`, the SkyDNS's configuration object should be stored under the key `/mydns/config`).
+* `etcd-version`: etcd version to be supported by skydns during runtime. Supported versions are etcd version 2 or etcd version 3. Support defaults to 2 (etcd version 2).
 
 To set the configuration, use something like:
 
