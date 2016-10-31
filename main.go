@@ -18,20 +18,16 @@ import (
 	"time"
 
 	backendetcd "github.com/skynetservices/skydns/backends/etcd"
-	backendetcdv3 "github.com/nokia/skydns/backends/etcd3"
+	backendetcdv3 "github.com/skynetservices/skydns/backends/etcd3"
 	"github.com/skynetservices/skydns/metrics"
 	"github.com/skynetservices/skydns/msg"
-	//"github.com/skynetservices/skydns/server"
-	"github.com/nokia/skydns/server"
+	"github.com/skynetservices/skydns/server"
 
 	etcd "github.com/coreos/etcd/client"
 	etcdv3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/miekg/dns"
 	"golang.org/x/net/context"
-	"crypto/tls"
-	"crypto/x509"
-	"io/ioutil"
 )
 
 var (
@@ -111,7 +107,6 @@ func init() {
 }
 
 func main() {
-	fmt.Printf("FBDL with etcd3 flag version\n")
 	flag.Parse()
 
 	if config.Version {
@@ -120,20 +115,16 @@ func main() {
 	}
 
 	machines := strings.Split(machine, ",")
-	//client, err := newEtcdClient(machines, tlspem, tlskey, cacert, username, password)
 
-	//TODO: FBDL can be refactored further
 	var clientptr *etcdv3.Client
 	var err error
 	var clientv3 etcdv3.Client
 	var clientv2 etcd.KeysAPI
 
 	if config.Etcd3 {
-		fmt.Printf("Creating new etcdv3 client\n")
 		clientptr, err = newEtcdV3Client(machines, tlspem, tlskey, cacert)
 		clientv3 = *clientptr
 	} else {
-		fmt.Printf("Creating new etcdv2 client\n")
 		clientv2, err = newEtcdV2Client(machines, tlspem, tlskey, cacert, username, password)
 	}
 
@@ -153,16 +144,11 @@ func main() {
 		log.Fatalf("skydns: addr is invalid: %s", err)
 	}
 
-	//if err := loadConfig(client, config); err != nil {
-	//	log.Fatalf("skydns: %s", err)
-	//}
 	if config.Etcd3 {
-		fmt.Printf("Loading v3 config\n")
 		if err := loadEtcdV3Config(clientv3, config); err != nil {
 			log.Fatalf("skydns: %s", err)
 		}
 	} else {
-		fmt.Printf("Loading v2 config\n")
 		if err := loadEtcdV2Config(clientv2, config); err != nil {
 			log.Fatalf("skydns: %s", err)
 		}
@@ -178,19 +164,13 @@ func main() {
 	}
 
 
-	//backend := backendetcd.NewBackend(client, ctx, &backendetcd.Config{
-	//	Ttl:      config.Ttl,
-	//	Priority: config.Priority,
-	//})
 	var backend server.Backend
 	if config.Etcd3 {
-		fmt.Printf("Establish v3 backend\n")
 		backend = backendetcdv3.NewBackendv3(clientv3, ctx, &backendetcdv3.Config{
 			Ttl: config.Ttl,
 			Priority: config.Priority,
 		})
 	} else {
-		fmt.Printf("Establish v2 backend\n")
 		backend = backendetcd.NewBackend(clientv2, ctx, &backendetcd.Config{
 			Ttl: config.Ttl,
 			Priority: config.Priority,
@@ -204,7 +184,6 @@ func main() {
 			duration := 1 * time.Second
 
 			if config.Etcd3 {
-				fmt.Printf("Doing v3 watcher\n")
 				var watcher etcdv3.WatchChan
 				watcher = clientv3.Watch(ctx, msg.Path(config.Domain) + "/dns/stub/", etcdv3.WithPrefix())
 
@@ -223,7 +202,6 @@ func main() {
 					}
 				}
 			} else {
-				fmt.Printf("Doing v2 watcher\n")
 				var watcher etcd.Watcher
 
 				watcher = clientv2.Watcher(msg.Path(config.Domain)+"/dns/stub/", &etcd.WatcherOptions{AfterIndex: 0, Recursive: true})
@@ -249,14 +227,12 @@ func main() {
 		}()
 	}
 
-	fmt.Printf("Launching metrics\n")
 	if err := metrics.Metrics(); err != nil {
 		log.Fatalf("skydns: %s", err)
 	} else {
 		log.Printf("skydns: metrics enabled on :%s%s", metrics.Port, metrics.Path)
 	}
 
-	fmt.Printf("Invoking run\n")
 	if err := s.Run(); err != nil {
 		log.Fatalf("skydns: %s", err)
 	}
@@ -276,7 +252,6 @@ func loadEtcdV2Config(client etcd.KeysAPI, config *server.Config) error {
 	return nil
 }
 
-//TODO: FBDL for refactoring maybe to some other file yung mga v3
 func loadEtcdV3Config(client etcdv3.Client, config *server.Config) error {
 	configPath := "/" + msg.PathPrefix + "/config"
 	resp, err := client.Get(ctx, configPath)
@@ -325,43 +300,23 @@ func newEtcdV2Client(machines []string, certFile, keyFile, caFile, username, pas
 	return etcd.NewKeysAPI(cli), nil
 }
 
-//TODO: FBDL for refactoring
 func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etcdv3.Client, error) {
+
+	tr, err := newHTTPSTransport(tlsCert, tlsKey, tlsCACert)
+	if err != nil {
+		return nil, err
+	}
+
 
 	etcdCfg := etcdv3.Config {
 		Endpoints: machines,
-		TLS: newTlsConfig(tlsCert, tlsKey, tlsCACert),
+		TLS: tr.TLSClientConfig,
 	}
 	cli, err := etcdv3.New(etcdCfg)
 	if err != nil {
 		return nil, err
 	}
 	return cli, nil
-}
-
-//TODO: FBDL for refactoring
-func newTlsConfig(tlsCertFile, tlsKeyFile, tlsCACertFile string) *tls.Config {
-
-	var cc *tls.Config = nil
-
-	if tlsCertFile != "" && tlsKeyFile != "" {
-		var rpool *x509.CertPool
-		if tlsCACertFile != "" {
-			if pemBytes, err := ioutil.ReadFile(tlsCACertFile); err == nil {
-				rpool = x509.NewCertPool()
-				rpool.AppendCertsFromPEM(pemBytes)
-			}
-		}
-
-		if tlsCert, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile); err == nil {
-			cc = &tls.Config {
-				RootCAs: rpool,
-				Certificates: []tls.Certificate{tlsCert},
-				InsecureSkipVerify: true,
-			}
-		}
-	}
-	return cc
 }
 
 func newHTTPSTransport(certFile, keyFile, caFile string) (*http.Transport, error) {

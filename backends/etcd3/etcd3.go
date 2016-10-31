@@ -108,33 +108,47 @@ func (g *Backendv3) loopNodes(kv []*mvccpb.KeyValue, nameParts []string, star bo
 	if bx == nil {
 		bx = make(map[bareService]bool)
 	}
+Nodes:
+	for _, item := range kv {
 
-	index := 0
-	lengthOfEntries := len(kv)
-	for index < lengthOfEntries {
+		if star {
+			s := string(item.Key[:])
+			keyParts := strings.Split(s, "/")
+			for i, n := range nameParts {
+				if i > len(keyParts)-1 {
+					continue Nodes
+				}
+				if n == "*" || n == "any" {
+					continue
+				}
+				if keyParts[i] != n {
+					continue Nodes
+				}
+			}
+		}
 
-		serviceInstance := new(msg.Service)
-		if err := json.Unmarshal(kv[index].Value, serviceInstance); err != nil {
+
+		serv := new(msg.Service)
+		if err := json.Unmarshal(item.Value, serv); err != nil {
 			return nil, err
 		}
 
-		b := bareService{serviceInstance.Host,
-				 serviceInstance.Port,
-				 serviceInstance.Priority,
-				 serviceInstance.Weight,
-			 	 serviceInstance.Text}
+		b := bareService{serv.Host,
+				 serv.Port,
+				 serv.Priority,
+				 serv.Weight,
+				 serv.Text}
 
 		bx[b] = true
-		serviceInstance.Key = string(kv[index].Key)
+		serv.Key = string(item.Key)
 		//TODO: another call (LeaseRequest) for TTL when RPC in etcdv3 is ready
-		serviceInstance.Ttl = g.calculateTtl(kv[index], serviceInstance)
+		serv.Ttl = g.calculateTtl(item, serv)
 
-		if serviceInstance.Priority == 0 {
-			serviceInstance.Priority = int(g.config.Priority)
+		if serv.Priority == 0 {
+			serv.Priority = int(g.config.Priority)
 		}
 
-		sx = append(sx, *serviceInstance)
-		index++
+		sx = append(sx, *serv)
 	}
 	return sx, nil
 }
