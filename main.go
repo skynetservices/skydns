@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -19,9 +18,11 @@ import (
 	"time"
 
 	backendetcd "github.com/skynetservices/skydns/backends/etcd"
+	backendetcdv3 "github.com/nokia/skydns/backends/etcd3"
 	"github.com/skynetservices/skydns/metrics"
 	"github.com/skynetservices/skydns/msg"
-	"github.com/skynetservices/skydns/server"
+	//"github.com/skynetservices/skydns/server"
+	"github.com/nokia/skydns/server"
 
 	etcd "github.com/coreos/etcd/client"
 	etcdv3 "github.com/coreos/etcd/clientv3"
@@ -30,6 +31,7 @@ import (
 	"golang.org/x/net/context"
 	"crypto/tls"
 	"crypto/x509"
+	"io/ioutil"
 )
 
 var (
@@ -105,10 +107,11 @@ func init() {
 
 	flag.StringVar(&msg.PathPrefix, "path-prefix", env("SKYDNS_PATH_PREFIX", "skydns"), "backend(etcd) path prefix, default: skydns")
 
-	flag.IntVar(&config.EtcdVersion, "etcd-version", 2, "etcd version to be supported by skydns during runtime. Supported versions are 2 or 3")
+	flag.BoolVar(&config.Etcd3, "etcd3", false, "flag that denotes the etcd version to be supported by skydns during runtime. Defaults to false.")
 }
 
 func main() {
+	fmt.Printf("FBDL with etcd3 flag version\n")
 	flag.Parse()
 
 	if config.Version {
@@ -116,22 +119,21 @@ func main() {
 		os.Exit(0)
 	}
 
-	if !((config.EtcdVersion == 2) || (config.EtcdVersion == 3)) {
-		fmt.Printf("etcd version value (%s) not supported. view --help for info.\n", strconv.Itoa(config.EtcdVersion))
-		os.Exit(0)
-	}
-
 	machines := strings.Split(machine, ",")
+	//client, err := newEtcdClient(machines, tlspem, tlskey, cacert, username, password)
 
+	//TODO: FBDL can be refactored further
 	var clientptr *etcdv3.Client
 	var err error
 	var clientv3 etcdv3.Client
 	var clientv2 etcd.KeysAPI
 
-	if config.EtcdVersion == 3 {
+	if config.Etcd3 {
+		fmt.Printf("Creating new etcdv3 client\n")
 		clientptr, err = newEtcdV3Client(machines, tlspem, tlskey, cacert)
 		clientv3 = *clientptr
 	} else {
+		fmt.Printf("Creating new etcdv2 client\n")
 		clientv2, err = newEtcdV2Client(machines, tlspem, tlskey, cacert, username, password)
 	}
 
@@ -151,15 +153,21 @@ func main() {
 		log.Fatalf("skydns: addr is invalid: %s", err)
 	}
 
-	if config.EtcdVersion == 3 {
+	//if err := loadConfig(client, config); err != nil {
+	//	log.Fatalf("skydns: %s", err)
+	//}
+	if config.Etcd3 {
+		fmt.Printf("Loading v3 config\n")
 		if err := loadEtcdV3Config(clientv3, config); err != nil {
 			log.Fatalf("skydns: %s", err)
 		}
 	} else {
+		fmt.Printf("Loading v2 config\n")
 		if err := loadEtcdV2Config(clientv2, config); err != nil {
 			log.Fatalf("skydns: %s", err)
 		}
 	}
+
 
 	if err := server.SetDefaults(config); err != nil {
 		log.Fatalf("skydns: defaults could not be set from /etc/resolv.conf: %v", err)
@@ -169,36 +177,41 @@ func main() {
 		config.Local = dns.Fqdn(config.Local)
 	}
 
+
+	//backend := backendetcd.NewBackend(client, ctx, &backendetcd.Config{
+	//	Ttl:      config.Ttl,
+	//	Priority: config.Priority,
+	//})
 	var backend server.Backend
-	if config.EtcdVersion == 3 {
-		backend = backendetcd.NewBackendv3(clientv3, ctx, &backendetcd.Config{
-			Ttl:      config.Ttl,
+	if config.Etcd3 {
+		fmt.Printf("Establish v3 backend\n")
+		backend = backendetcdv3.NewBackendv3(clientv3, ctx, &backendetcdv3.Config{
+			Ttl: config.Ttl,
 			Priority: config.Priority,
 		})
 	} else {
+		fmt.Printf("Establish v2 backend\n")
 		backend = backendetcd.NewBackend(clientv2, ctx, &backendetcd.Config{
-			Ttl:      config.Ttl,
+			Ttl: config.Ttl,
 			Priority: config.Priority,
 		})
 	}
 
 	s := server.New(backend, config)
-
 	if stub {
 		s.UpdateStubZones()
 		go func() {
 			duration := 1 * time.Second
 
-			if config.EtcdVersion == 3 {
+			if config.Etcd3 {
+				fmt.Printf("Doing v3 watcher\n")
 				var watcher etcdv3.WatchChan
-
 				watcher = clientv3.Watch(ctx, msg.Path(config.Domain) + "/dns/stub/", etcdv3.WithPrefix())
-				for wresp := range watcher {
 
+				for wresp := range watcher {
 					if wresp.Err() != nil {
-						//
 						log.Printf("skydns: stubzone update failed, sleeping %s + ~3s", duration)
-						time.Sleep(duration + (time.Duration(rand.Float32() * 3e9))) // Add some random.
+						time.Sleep(duration + (time.Duration(rand.Float32() * 3e9)))
 						duration *= 2
 						if duration > 32 * time.Second {
 							duration = 32 * time.Second
@@ -206,21 +219,24 @@ func main() {
 					} else {
 						s.UpdateStubZones()
 						log.Printf("skydns: stubzone update")
-						duration = 1 * time.Second // reset
+						duration = 1 * time.Second //reset
 					}
 				}
 			} else {
+				fmt.Printf("Doing v2 watcher\n")
 				var watcher etcd.Watcher
+
 				watcher = clientv2.Watcher(msg.Path(config.Domain)+"/dns/stub/", &etcd.WatcherOptions{AfterIndex: 0, Recursive: true})
 
 				for {
 					_, err := watcher.Next(ctx)
+
 					if err != nil {
 						//
 						log.Printf("skydns: stubzone update failed, sleeping %s + ~3s", duration)
 						time.Sleep(duration + (time.Duration(rand.Float32() * 3e9))) // Add some random.
 						duration *= 2
-						if duration > 32 * time.Second {
+						if duration > 32*time.Second {
 							duration = 32 * time.Second
 						}
 					} else {
@@ -233,19 +249,35 @@ func main() {
 		}()
 	}
 
+	fmt.Printf("Launching metrics\n")
 	if err := metrics.Metrics(); err != nil {
 		log.Fatalf("skydns: %s", err)
 	} else {
 		log.Printf("skydns: metrics enabled on :%s%s", metrics.Port, metrics.Path)
 	}
 
+	fmt.Printf("Invoking run\n")
 	if err := s.Run(); err != nil {
 		log.Fatalf("skydns: %s", err)
 	}
 }
 
-func loadEtcdV3Config(client etcdv3.Client, config *server.Config) error {
+func loadEtcdV2Config(client etcd.KeysAPI, config *server.Config) error {
 	// Override what isn't set yet from the command line.
+	configPath := "/" + msg.PathPrefix + "/config"
+	resp, err := client.Get(ctx, configPath, nil)
+	if err != nil {
+		log.Printf("skydns: falling back to default configuration, could not read from etcd: %s", err)
+		return nil
+	}
+	if err := json.Unmarshal([]byte(resp.Node.Value), config); err != nil {
+		return fmt.Errorf("failed to unmarshal config: %s", err.Error())
+	}
+	return nil
+}
+
+//TODO: FBDL for refactoring maybe to some other file yung mga v3
+func loadEtcdV3Config(client etcdv3.Client, config *server.Config) error {
 	configPath := "/" + msg.PathPrefix + "/config"
 	resp, err := client.Get(ctx, configPath)
 	if err != nil {
@@ -256,22 +288,6 @@ func loadEtcdV3Config(client etcdv3.Client, config *server.Config) error {
 		if err := json.Unmarshal([]byte(ev.Value), config); err != nil {
 			return fmt.Errorf("failed to unmarshal config: %s", err.Error())
 		}
-	}
-	return nil
-}
-
-func loadEtcdV2Config(client etcd.KeysAPI, config *server.Config) error {
-	// Override what isn't set yet from the command line.
-	configPath := "/" + msg.PathPrefix + "/config"
-	resp, err := client.Get(ctx, configPath, nil)
-
-	if err != nil {
-		log.Printf("skydns: falling back to default configuration, could not read from etcd: %s", err)
-		return nil
-	}
-
-	if err := json.Unmarshal([]byte(resp.Node.Value), config); err != nil {
-		return fmt.Errorf("failed to unmarshal config: %s", err.Error())
 	}
 	return nil
 }
@@ -291,41 +307,6 @@ func validateHostPort(hostPort string) error {
 	return nil
 }
 
-func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etcdv3.Client, error) {
-	etcdCfg := etcdv3.Config{
-		Endpoints: machines,
-		TLS: newTLSConfig(tlsCert, tlsKey, tlsCACert),
-	}
-	cli, err := etcdv3.New(etcdCfg)
-	if err != nil {
-		return nil, err
-	}
-	return cli, nil
-}
-
-func newTLSConfig(tlsCertFile, tlsKeyFile, tlsCACertFile string) *tls.Config {
-	var cc *tls.Config = nil
-
-	if tlsCertFile != "" && tlsKeyFile != "" {
-		var rpool *x509.CertPool
-		if tlsCACertFile != "" {
-			if pemBytes, err := ioutil.ReadFile(tlsCACertFile); err == nil {
-				rpool = x509.NewCertPool()
-				rpool.AppendCertsFromPEM(pemBytes)
-			}
-		}
-
-		if tlsCert, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile); err == nil {
-			cc = &tls.Config{
-				RootCAs:            rpool,
-				Certificates:       []tls.Certificate{tlsCert},
-				InsecureSkipVerify: true,
-			}
-		}
-	}
-	return cc
-}
-
 func newEtcdV2Client(machines []string, certFile, keyFile, caFile, username, password string) (etcd.KeysAPI, error) {
 	t, err := newHTTPSTransport(certFile, keyFile, caFile)
 	if err != nil {
@@ -342,6 +323,45 @@ func newEtcdV2Client(machines []string, certFile, keyFile, caFile, username, pas
 		return nil, err
 	}
 	return etcd.NewKeysAPI(cli), nil
+}
+
+//TODO: FBDL for refactoring
+func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etcdv3.Client, error) {
+
+	etcdCfg := etcdv3.Config {
+		Endpoints: machines,
+		TLS: newTlsConfig(tlsCert, tlsKey, tlsCACert),
+	}
+	cli, err := etcdv3.New(etcdCfg)
+	if err != nil {
+		return nil, err
+	}
+	return cli, nil
+}
+
+//TODO: FBDL for refactoring
+func newTlsConfig(tlsCertFile, tlsKeyFile, tlsCACertFile string) *tls.Config {
+
+	var cc *tls.Config = nil
+
+	if tlsCertFile != "" && tlsKeyFile != "" {
+		var rpool *x509.CertPool
+		if tlsCACertFile != "" {
+			if pemBytes, err := ioutil.ReadFile(tlsCACertFile); err == nil {
+				rpool = x509.NewCertPool()
+				rpool.AppendCertsFromPEM(pemBytes)
+			}
+		}
+
+		if tlsCert, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile); err == nil {
+			cc = &tls.Config {
+				RootCAs: rpool,
+				Certificates: []tls.Certificate{tlsCert},
+				InsecureSkipVerify: true,
+			}
+		}
+	}
+	return cc
 }
 
 func newHTTPSTransport(certFile, keyFile, caFile string) (*http.Transport, error) {
