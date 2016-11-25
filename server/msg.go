@@ -40,7 +40,7 @@ func Fit(m *dns.Msg, size int, tcp bool) (*dns.Msg, bool) {
 		m.Answer = original[:mid]
 
 		if m.Len() < size {
-			min++
+			min = mid + 1
 			continue
 		}
 		max = mid
