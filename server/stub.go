@@ -103,7 +103,7 @@ Redo:
 	} else {
 		r, err = exchangeWithRetry(s.dnsUDPclient, req, ns[nsid])
 	}
-	if err == nil {
+	if err == nil || err == dns.ErrTruncated {
 		r.Compress = true
 		r.Id = req.Id
 		w.WriteMsg(r)

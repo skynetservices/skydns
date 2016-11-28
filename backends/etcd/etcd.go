@@ -186,5 +186,5 @@ func (g *Backend) calculateTtl(node *etcd.Node, serv *msg.Service) uint32 {
 
 // Client exposes the underlying Etcd client (used in tests).
 func (g *Backend) Client() etcd.KeysAPI {
-       return g.client
+	return g.client
 }
