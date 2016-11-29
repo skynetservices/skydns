@@ -20,6 +20,7 @@ import (
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/go-systemd/activation"
 	"github.com/miekg/dns"
+	etcd3 "github.com/skynetservices/skydns/backends/etcd3"
 )
 
 const Version = "2.5.3a"
@@ -438,6 +439,7 @@ func (s *server) AddressRecords(q dns.Question, name string, previousRecords []d
 			}
 
 			newRecord := serv.NewCNAME(q.Name, dns.Fqdn(serv.Host))
+
 			if len(previousRecords) > 7 {
 				logf("CNAME lookup limit of 8 exceeded for %s", newRecord)
 				// don't add it, and just continue
@@ -450,6 +452,7 @@ func (s *server) AddressRecords(q dns.Question, name string, previousRecords []d
 
 			nextRecords, err := s.AddressRecords(dns.Question{Name: dns.Fqdn(serv.Host), Qtype: q.Qtype, Qclass: q.Qclass},
 				strings.ToLower(dns.Fqdn(serv.Host)), append(previousRecords, newRecord), bufsize, dnssec, both)
+
 			if err == nil {
 				// Only have we found something we should add the CNAME and the IP addresses.
 				if len(nextRecords) > 0 {
@@ -513,7 +516,9 @@ func (s *server) NSRecords(q dns.Question, name string) (records []dns.RR, extra
 // SRVRecords returns SRV records from etcd.
 // If the Target is not a name but an IP address, a name is created.
 func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
+
 	services, err := s.backend.Records(name, false)
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -522,6 +527,7 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 
 	// Looping twice to get the right weight vs priority
 	w := make(map[int]int)
+
 	for _, serv := range services {
 		weight := 100
 		if serv.Weight != 0 {
@@ -536,12 +542,14 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 	lookup := make(map[string]bool)
 	for _, serv := range services {
 		w1 := 100.0 / float64(w[serv.Priority])
+
 		if serv.Weight == 0 {
 			w1 *= 100
 		} else {
 			w1 *= float64(serv.Weight)
 		}
 		weight := uint16(math.Floor(w1))
+
 		ip := net.ParseIP(serv.Host)
 		switch {
 		case ip == nil:
@@ -598,6 +606,7 @@ func (s *server) SRVRecords(q dns.Question, name string, bufsize uint16, dnssec 
 // MXRecords returns MX records from etcd.
 // If the Target is not a name but an IP address, a name is created.
 func (s *server) MXRecords(q dns.Question, name string, bufsize uint16, dnssec bool) (records []dns.RR, extra []dns.RR, err error) {
+
 	services, err := s.backend.Records(name, false)
 	if err != nil {
 		return nil, nil, err
@@ -877,14 +886,32 @@ func isTCP(w dns.ResponseWriter) bool {
 	return ok
 }
 
-// etcNameError return a NameError to the client if the error
-// returned from etcd has ErrorCode == 100.
-func isEtcdNameError(err error, s *server) bool {
+func verdictEtcdV2(err error, s *server) bool {
 	if e, ok := err.(etcd.Error); ok && e.Code == etcd.ErrorCodeKeyNotFound {
 		return true
 	}
 	if err != nil {
-		logf("error from backend: %s", err)
+		logf("error from backend v2: %s", err)
 	}
 	return false
+}
+
+func verdictEtcdV3(err error, s *server) bool {
+	if e3, ok := err.(etcd3.Etcd3Error); ok && e3.Code == etcd3.KEYNOTFOUND {
+		return true
+	}
+	if err != nil {
+		logf("error from backend v3: %s", err)
+	}
+	return false
+}
+
+// etcNameError return a NameError to the client if the error
+// returned from etcd has ErrorCode == 100.
+func isEtcdNameError(err error, s *server) bool {
+	if s.config.Etcd3 {
+		return verdictEtcdV3(err, s);
+	} else {
+		return verdictEtcdV2(err, s);
+	}
 }

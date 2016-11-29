@@ -82,6 +82,7 @@ func newTestServer(t *testing.T, c bool) *server {
 	s.config.RCacheTtl = RCacheTtl
 	s.config.Ttl = 3600
 	s.config.Ndots = 2
+	s.config.Etcd3 = false;
 
 	s.dnsUDPclient = &dns.Client{Net: "udp", ReadTimeout: 2 * s.config.ReadTimeout, WriteTimeout: 2 * s.config.ReadTimeout, SingleInflight: true}
 	s.dnsTCPclient = &dns.Client{Net: "tcp", ReadTimeout: 2 * s.config.ReadTimeout, WriteTimeout: 2 * s.config.ReadTimeout, SingleInflight: true}

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"encoding/json"
+	//"github.com/skynetservices/skydns/backends/etcd"
 )
 
 type Config struct {
@@ -41,11 +42,15 @@ func NewBackendv3 (client etcdv3.Client, ctx context.Context, config *Config) *B
 }
 
 func (g *Backendv3) Records(name string, exact bool) ([]msg.Service, error) {
+
 	path, star := msg.PathWithWildcard(name)
+
 	r, err := g.get(path, true)
+
 	if err != nil {
 		return nil, err
 	}
+
 	segments := strings.Split(msg.Path(name), "/")
 
 	return g.loopNodes(r.Kvs, segments, star, nil)
@@ -74,23 +79,34 @@ func (g *Backendv3) ReverseRecord(name string) (*msg.Service, error) {
 }
 
 func (g *Backendv3) get(path string, recursive bool) (*etcdv3.GetResponse, error) {
+
 	resp, err := g.inflight.Do(path, func() (interface{}, error){
 		if recursive == true {
 			r, e := g.client.Get(g.ctx, path, etcdv3.WithPrefix())
+
 			if e != nil {
 				return nil, e
 			}
+			if r.Kvs == nil { // there is no error thrown even if a key is not found in etcd3, we must check this instead.
+				return nil, Etcd3Error{KEYNOTFOUND, "Etcd3 Key Not Found"};
+			}
+
 			return r, e
 		} else {
 			r, e := g.client.Get(g.ctx, path)
+
 			if e != nil {
 				return nil, e
 			}
+
 			return r, e
 		}
 	})
 
 	if err != nil {
+		return nil, err
+	}
+	if resp == nil {
 		return nil, err
 	}
 	return resp.(*etcdv3.GetResponse), err
@@ -104,12 +120,37 @@ type bareService struct {
 	Text string
 }
 
+/*
+ * etcdv3 doesn't treat its keys as directories anymore
+ * however skydns does, so this is needed to make the results
+ * from etcd3.get to respect the rules of skydns.
+ */
+func isItemDirTreeNode(nameParts []string, keyParts []string) bool {
+	for i, w := range nameParts {
+		if w == "*" || w == "any"{
+			return true;
+		}
+		if keyParts[i] != w && (!(w == "*" || w == "any")) {
+			return false;
+		}
+	}
+	return true;
+}
+
+
 func (g *Backendv3) loopNodes(kv []*mvccpb.KeyValue, nameParts []string, star bool, bx map[bareService]bool) (sx []msg.Service, err error) {
 	if bx == nil {
 		bx = make(map[bareService]bool)
 	}
 Nodes:
 	for _, item := range kv {
+
+		s := string(item.Key[:])
+		keyParts := strings.Split(s, "/")
+
+		if(!isItemDirTreeNode(nameParts, keyParts)) {
+			continue;
+		}
 
 		if star {
 			s := string(item.Key[:])
@@ -134,10 +175,14 @@ Nodes:
 		}
 
 		b := bareService{serv.Host,
-				 serv.Port,
-				 serv.Priority,
-				 serv.Weight,
-				 serv.Text}
+			         serv.Port,
+			         serv.Priority,
+			         serv.Weight,
+			         serv.Text}
+
+		if _, ok := bx[b]; ok {
+			continue
+		}
 
 		bx[b] = true
 		serv.Key = string(item.Key)
