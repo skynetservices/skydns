@@ -44,6 +44,10 @@ Redo:
 		r, err = exchangeWithRetry(s.dnsTCPclient, req, s.config.Nameservers[nsid])
 	} else {
 		r, err = exchangeWithRetry(s.dnsUDPclient, req, s.config.Nameservers[nsid])
+		if err == dns.ErrTruncated {
+			// Retry using TCP if truncated
+			r, err = exchangeWithRetry(s.dnsTCPclient, req, s.config.Nameservers[nsid])
+		}
 	}
 	if err == nil {
 		r.Compress = true
@@ -51,6 +55,7 @@ Redo:
 		w.WriteMsg(r)
 		return r
 	}
+
 	// Seen an error, this can only mean, "server not reached", try again
 	// but only if we have not exausted our nameservers.
 	if try < len(s.config.Nameservers) {
