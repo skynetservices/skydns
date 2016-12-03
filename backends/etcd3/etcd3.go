@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"encoding/json"
-	//"github.com/skynetservices/skydns/backends/etcd"
 )
 
 type Config struct {
@@ -42,17 +41,12 @@ func NewBackendv3 (client etcdv3.Client, ctx context.Context, config *Config) *B
 }
 
 func (g *Backendv3) Records(name string, exact bool) ([]msg.Service, error) {
-
 	path, star := msg.PathWithWildcard(name)
-
 	r, err := g.get(path, true)
-
 	if err != nil {
 		return nil, err
 	}
-
 	segments := strings.Split(msg.Path(name), "/")
-
 	return g.loopNodes(r.Kvs, segments, star, nil)
 }
 
@@ -79,7 +73,6 @@ func (g *Backendv3) ReverseRecord(name string) (*msg.Service, error) {
 }
 
 func (g *Backendv3) get(path string, recursive bool) (*etcdv3.GetResponse, error) {
-
 	resp, err := g.inflight.Do(path, func() (interface{}, error){
 		if recursive == true {
 			r, e := g.client.Get(g.ctx, path, etcdv3.WithPrefix())
@@ -88,7 +81,7 @@ func (g *Backendv3) get(path string, recursive bool) (*etcdv3.GetResponse, error
 				return nil, e
 			}
 			if r.Kvs == nil { // there is no error thrown even if a key is not found in etcd3, we must check this instead.
-				return nil, Etcd3Error{KEYNOTFOUND, "Etcd3 Key Not Found"};
+				return nil, Etcd3Error{KeyNotFound, "Etcd3 Key Not Found"};
 			}
 
 			return r, e
@@ -104,9 +97,6 @@ func (g *Backendv3) get(path string, recursive bool) (*etcdv3.GetResponse, error
 	})
 
 	if err != nil {
-		return nil, err
-	}
-	if resp == nil {
 		return nil, err
 	}
 	return resp.(*etcdv3.GetResponse), err
@@ -130,7 +120,7 @@ func isItemDirTreeNode(nameParts []string, keyParts []string) bool {
 		if w == "*" || w == "any"{
 			return true;
 		}
-		if keyParts[i] != w && (!(w == "*" || w == "any")) {
+		if keyParts[i] != w {
 			return false;
 		}
 	}
@@ -145,7 +135,7 @@ func (g *Backendv3) loopNodes(kv []*mvccpb.KeyValue, nameParts []string, star bo
 Nodes:
 	for _, item := range kv {
 
-		s := string(item.Key[:])
+		s := string(item.Key)
 		keyParts := strings.Split(s, "/")
 
 		if(!isItemDirTreeNode(nameParts, keyParts)) {
@@ -153,7 +143,7 @@ Nodes:
 		}
 
 		if star {
-			s := string(item.Key[:])
+			s := string(item.Key)
 			keyParts := strings.Split(s, "/")
 			for i, n := range nameParts {
 				if i > len(keyParts)-1 {

@@ -18,9 +18,9 @@ import (
 	"github.com/skynetservices/skydns/msg"
 
 	etcd "github.com/coreos/etcd/client"
+	etcd3 "github.com/skynetservices/skydns/backends/etcd3"
 	"github.com/coreos/go-systemd/activation"
 	"github.com/miekg/dns"
-	etcd3 "github.com/skynetservices/skydns/backends/etcd3"
 )
 
 const Version = "2.5.3a"
@@ -886,7 +886,7 @@ func isTCP(w dns.ResponseWriter) bool {
 	return ok
 }
 
-func verdictEtcdV2(err error, s *server) bool {
+func isEtcd2NameError(err error, s *server) bool {
 	if e, ok := err.(etcd.Error); ok && e.Code == etcd.ErrorCodeKeyNotFound {
 		return true
 	}
@@ -896,8 +896,8 @@ func verdictEtcdV2(err error, s *server) bool {
 	return false
 }
 
-func verdictEtcdV3(err error, s *server) bool {
-	if e3, ok := err.(etcd3.Etcd3Error); ok && e3.Code == etcd3.KEYNOTFOUND {
+func isEtcd3NameError(err error, s *server) bool {
+	if e3, ok := err.(etcd3.Etcd3Error); ok && e3.Code == etcd3.KeyNotFound {
 		return true
 	}
 	if err != nil {
@@ -910,8 +910,8 @@ func verdictEtcdV3(err error, s *server) bool {
 // returned from etcd has ErrorCode == 100.
 func isEtcdNameError(err error, s *server) bool {
 	if s.config.Etcd3 {
-		return verdictEtcdV3(err, s);
+		return isEtcd3NameError(err, s);
 	} else {
-		return verdictEtcdV2(err, s);
+		return isEtcd2NameError(err, s);
 	}
 }

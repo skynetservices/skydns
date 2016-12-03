@@ -19,5 +19,5 @@ func (e Etcd3Error) Error() string {
 }
 
 const (
-	KEYNOTFOUND = 100
+	KeyNotFound = 100 //the value 100 is an arbritary value to coincide with what was being used in etcdv2.
 )
