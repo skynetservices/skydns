@@ -55,7 +55,7 @@ func (g *Backend) Records(name string, exact bool, stub bool) ([]msg.Service, er
 	case r.Node.Dir:
 		return g.loopNodes(r.Node.Nodes, segments, star, stub, nil)
 	default:
-		return g.loopNodes([]*etcd.Node{r.Node}, segments, false, stub,  nil)
+		return g.loopNodes([]*etcd.Node{r.Node}, segments, false, stub, nil)
 	}
 }
 
@@ -115,14 +115,14 @@ type bareService struct {
 
 // loopNodes recursively loops through the nodes and returns all the values. The nodes' keyname
 // will be match against any wildcards when star is true.
-func (g *Backend) loopNodes(ns []*etcd.Node, nameParts []string, star bool, stub bool,  bx map[bareService]bool) (sx []msg.Service, err error) {
+func (g *Backend) loopNodes(ns []*etcd.Node, nameParts []string, star bool, stub bool, bx map[bareService]bool) (sx []msg.Service, err error) {
 	if bx == nil {
 		bx = make(map[bareService]bool)
 	}
 Nodes:
 	for _, n := range ns {
 		if n.Dir {
-			nodes, err := g.loopNodes(n.Nodes, nameParts, star, stub,  bx)
+			nodes, err := g.loopNodes(n.Nodes, nameParts, star, stub, bx)
 			if err != nil {
 				return nil, err
 			}
@@ -151,10 +151,10 @@ Nodes:
 		subdomain := ""
 		if stub {
 			index := strings.LastIndex(n.Key, "/")
-			subdomain = string(n.Key[0 : index])
+			subdomain = string(n.Key[0:index])
 
 		}
-		b := bareService{serv.Host, serv.Port, serv.Priority, serv.Weight, serv.Text,subdomain}
+		b := bareService{serv.Host, serv.Port, serv.Priority, serv.Weight, serv.Text, subdomain}
 		if _, ok := bx[b]; ok {
 			continue
 		}
