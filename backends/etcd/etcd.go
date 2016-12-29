@@ -42,7 +42,7 @@ func NewBackend(client etcd.KeysAPI, ctx context.Context, config *Config) *Backe
 	}
 }
 
-func (g *Backend) Records(name string, exact bool) ([]msg.Service, error) {
+func (g *Backend) Records(name string, exact bool, stub bool) ([]msg.Service, error) {
 	path, star := msg.PathWithWildcard(name)
 	r, err := g.get(path, true)
 	if err != nil {
@@ -53,9 +53,9 @@ func (g *Backend) Records(name string, exact bool) ([]msg.Service, error) {
 	case exact && r.Node.Dir:
 		return nil, nil
 	case r.Node.Dir:
-		return g.loopNodes(r.Node.Nodes, segments, star, nil)
+		return g.loopNodes(r.Node.Nodes, segments, star, stub, nil)
 	default:
-		return g.loopNodes([]*etcd.Node{r.Node}, segments, false, nil)
+		return g.loopNodes([]*etcd.Node{r.Node}, segments, false, stub,  nil)
 	}
 }
 
@@ -72,7 +72,7 @@ func (g *Backend) ReverseRecord(name string) (*msg.Service, error) {
 		return nil, fmt.Errorf("reverse must not be a directory")
 	}
 	segments := strings.Split(msg.Path(name), "/")
-	records, err := g.loopNodes([]*etcd.Node{r.Node}, segments, false, nil)
+	records, err := g.loopNodes([]*etcd.Node{r.Node}, segments, false, false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +99,12 @@ func (g *Backend) get(path string, recursive bool) (*etcd.Response, error) {
 }
 
 type bareService struct {
-	Host     string
-	Port     int
-	Priority int
-	Weight   int
-	Text     string
+	Host      string
+	Port      int
+	Priority  int
+	Weight    int
+	Text      string
+	SubDomain string
 }
 
 // skydns/local/skydns/east/staging/web
@@ -114,14 +115,14 @@ type bareService struct {
 
 // loopNodes recursively loops through the nodes and returns all the values. The nodes' keyname
 // will be match against any wildcards when star is true.
-func (g *Backend) loopNodes(ns []*etcd.Node, nameParts []string, star bool, bx map[bareService]bool) (sx []msg.Service, err error) {
+func (g *Backend) loopNodes(ns []*etcd.Node, nameParts []string, star bool, stub bool,  bx map[bareService]bool) (sx []msg.Service, err error) {
 	if bx == nil {
 		bx = make(map[bareService]bool)
 	}
 Nodes:
 	for _, n := range ns {
 		if n.Dir {
-			nodes, err := g.loopNodes(n.Nodes, nameParts, star, bx)
+			nodes, err := g.loopNodes(n.Nodes, nameParts, star, stub,  bx)
 			if err != nil {
 				return nil, err
 			}
@@ -147,7 +148,13 @@ Nodes:
 		if err := json.Unmarshal([]byte(n.Value), serv); err != nil {
 			return nil, err
 		}
-		b := bareService{serv.Host, serv.Port, serv.Priority, serv.Weight, serv.Text}
+		subdomain := ""
+		if stub {
+			index := strings.LastIndex(n.Key, "/")
+			subdomain = string(n.Key[0 : index])
+
+		}
+		b := bareService{serv.Host, serv.Port, serv.Priority, serv.Weight, serv.Text,subdomain}
 		if _, ok := bx[b]; ok {
 			continue
 		}

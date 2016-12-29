@@ -34,7 +34,7 @@ var ednsStub = func() *dns.OPT {
 func (s *server) UpdateStubZones() {
 	stubmap := make(map[string][]string)
 
-	services, err := s.backend.Records("stub.dns."+s.config.Domain, false)
+	services, err := s.backend.Records("stub.dns."+s.config.Domain, false, true)
 	if err != nil {
 		logf("stub zone update failed: %s", err)
 		return
