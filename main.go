@@ -312,6 +312,11 @@ func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etc
 		Endpoints: machines,
 		TLS: tr.TLSClientConfig,
 	}
+
+	if tlsCert == "" || tlsKey == "" || tlsCACert == "" {
+		etcdCfg.TLS = nil
+	}
+
 	cli, err := etcdv3.New(etcdCfg)
 	if err != nil {
 		return nil, err

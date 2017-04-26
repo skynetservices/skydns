@@ -46,9 +46,11 @@ func (g *Backendv3) Records(name string, exact bool) ([]msg.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	segments := strings.Split(msg.Path(name), "/")
 
-	return g.loopNodes(r.Kvs, segments, star, nil)
+	segments := strings.Split(msg.Path(name), "/")
+	filteredKvs := g.filterNodes(r.Kvs, path)
+
+	return g.loopNodes(filteredKvs, segments, star, nil)
 }
 
 func (g *Backendv3) ReverseRecord(name string) (*msg.Service, error) {
@@ -104,7 +106,23 @@ type bareService struct {
 	Text string
 }
 
-func (g *Backendv3) loopNodes(kv []*mvccpb.KeyValue, nameParts []string, star bool, bx map[bareService]bool) (sx []msg.Service, err error) {
+func (g *Backendv3) filterNodes(kv []*mvccpb.KeyValue, path string) []*mvccpb.KeyValue {
+	var ret []*mvccpb.KeyValue
+	pathLen := len(path)
+
+	for _, item := range kv {
+		exactMatch := len(item.Key) == pathLen
+		isSubdomain := item.Key[len(path)] == '/'
+
+		if exactMatch || isSubdomain {
+			ret = append(ret, item)
+		}
+	}
+
+	return ret
+}
+
+ func (g *Backendv3) loopNodes(kv []*mvccpb.KeyValue, nameParts []string, star bool, bx map[bareService]bool) (sx []msg.Service, err error) {
 	if bx == nil {
 		bx = make(map[bareService]bool)
 	}
