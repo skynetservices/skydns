@@ -168,7 +168,7 @@ func TestDNSStubForward(t *testing.T) {
 
 	stubEx := &msg.Service{
 		// IP address of a.iana-servers.net.
-		Host: "199.43.132.53", Key: "a.example.com.stub.dns.skydns.test.",
+		Host: "199.43.135.53", Key: "a.example.com.stub.dns.skydns.test.",
 	}
 	stubBroken := &msg.Service{
 		Host: "127.0.0.1", Port: 5454, Key: "b.example.org.stub.dns.skydns.test.",
