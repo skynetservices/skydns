@@ -7,7 +7,7 @@ package server
 import "github.com/skynetservices/skydns/msg"
 
 type Backend interface {
-	Records(name string, exact bool) ([]msg.Service, error)
+	Records(name string, exact bool, stub bool) ([]msg.Service, error)
 	ReverseRecord(name string) (*msg.Service, error)
 }
 
@@ -19,10 +19,10 @@ type FirstBackend []Backend
 // FirstBackend implements Backend
 var _ Backend = FirstBackend{}
 
-func (g FirstBackend) Records(name string, exact bool) (records []msg.Service, err error) {
+func (g FirstBackend) Records(name string, exact bool, stub bool) (records []msg.Service, err error) {
 	var lastError error
 	for _, backend := range g {
-		if records, err = backend.Records(name, exact); err == nil && len(records) > 0 {
+		if records, err = backend.Records(name, exact, stub); err == nil && len(records) > 0 {
 			return records, nil
 		}
 		if err != nil {

@@ -40,7 +40,7 @@ func NewBackendv3 (client etcdv3.Client, ctx context.Context, config *Config) *B
 	}
 }
 
-func (g *Backendv3) Records(name string, exact bool) ([]msg.Service, error) {
+func (g *Backendv3) Records(name string, exact bool, stub bool) ([]msg.Service, error) {
 	path, star := msg.PathWithWildcard(name)
 	r, err := g.get(path, true)
 	if err != nil {
