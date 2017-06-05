@@ -46,6 +46,9 @@ type Service struct {
 
 	// Etcd key where we found this service and ignored from json un-/marshalling
 	Key string `json:"-"`
+
+	Mask string
+	View string
 }
 
 // NewSRV returns a new SRV record based on the Service.
