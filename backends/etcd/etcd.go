@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"regexp"
 
 	"github.com/skynetservices/skydns/msg"
 	"github.com/skynetservices/skydns/singleflight"
@@ -51,11 +52,11 @@ func (g *Backend) Records(name string, exact bool) ([]msg.Service, error) {
 	segments := strings.Split(msg.Path(name), "/")
 	switch {
 	case exact && r.Node.Dir:
-		return nil, nil
+		return g.loopNodes(r.Node.Nodes, segments, star, nil, true)
 	case r.Node.Dir:
-		return g.loopNodes(r.Node.Nodes, segments, star, nil)
+		return g.loopNodes(r.Node.Nodes, segments, star, nil, false)
 	default:
-		return g.loopNodes([]*etcd.Node{r.Node}, segments, false, nil)
+		return g.loopNodes([]*etcd.Node{r.Node}, segments, false, nil, false)
 	}
 }
 
@@ -72,7 +73,7 @@ func (g *Backend) ReverseRecord(name string) (*msg.Service, error) {
 		return nil, fmt.Errorf("reverse must not be a directory")
 	}
 	segments := strings.Split(msg.Path(name), "/")
-	records, err := g.loopNodes([]*etcd.Node{r.Node}, segments, false, nil)
+	records, err := g.loopNodes([]*etcd.Node{r.Node}, segments, false, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -114,18 +115,21 @@ type bareService struct {
 
 // loopNodes recursively loops through the nodes and returns all the values. The nodes' keyname
 // will be match against any wildcards when star is true.
-func (g *Backend) loopNodes(ns []*etcd.Node, nameParts []string, star bool, bx map[bareService]bool) (sx []msg.Service, err error) {
+// If xn_only is true, discard all subnodes but 'x[0-9]' to make round-robin still possible
+func (g *Backend) loopNodes(ns []*etcd.Node, nameParts []string, star bool, bx map[bareService]bool, xn_only bool) (sx []msg.Service, err error) {
 	if bx == nil {
 		bx = make(map[bareService]bool)
 	}
 Nodes:
 	for _, n := range ns {
 		if n.Dir {
-			nodes, err := g.loopNodes(n.Nodes, nameParts, star, bx)
-			if err != nil {
-				return nil, err
+			if !xn_only {
+				nodes, err := g.loopNodes(n.Nodes, nameParts, star, bx, false)
+				if err != nil {
+					return nil, err
+				}
+				sx = append(sx, nodes...)
 			}
-			sx = append(sx, nodes...)
 			continue
 		}
 		if star {
@@ -141,6 +145,12 @@ Nodes:
 				if keyParts[i] != n {
 					continue Nodes
 				}
+			}
+		}
+		if xn_only {
+			xn_match, _ := regexp.MatchString("\\/x[0-9]{1}$",n.Key)
+			if !xn_match {
+				continue
 			}
 		}
 		serv := new(msg.Service)

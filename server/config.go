@@ -38,6 +38,8 @@ type Config struct {
 	DNSSEC     string `json:"dnssec,omitempty"`
 	// Round robin A/AAAA replies. Default is true.
 	RoundRobin bool `json:"round_robin,omitempty"`
+	// Exact match keys exept x[0-9] subkeys for round robin
+	ExactMatch bool `json:"exact_match,omitempty"`
 	// Round robin selection of nameservers from among those listed, rather than have all forwarded requests try the first listed server first every time.
 	NSRotate bool `json:"ns_rotate,omitempty"`
 	// List of ip:port, separated by commas of recursive nameservers to forward queries to.

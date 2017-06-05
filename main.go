@@ -83,6 +83,7 @@ func init() {
 	flag.StringVar(&password, "password", env("ETCD_PASSWORD", ""), "Password used to support etcd basic auth")
 	flag.DurationVar(&config.ReadTimeout, "rtimeout", 2*time.Second, "read timeout")
 	flag.BoolVar(&config.RoundRobin, "round-robin", true, "round robin A/AAAA replies")
+	flag.BoolVar(&config.ExactMatch, "exact", false, "only exact matches (except round robin x[0-9] subkeys)")
 	flag.BoolVar(&config.NSRotate, "ns-rotate", true, "round robin selection of nameservers from among those listed")
 	flag.BoolVar(&stub, "stubzones", false, "support stub zones")
 	flag.BoolVar(&config.Verbose, "verbose", false, "log queries")
