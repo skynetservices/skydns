@@ -359,6 +359,9 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		m.Answer = append(m.Answer, records...)
 		m.Extra = append(m.Extra, extra...)
 	case dns.TypeA, dns.TypeAAAA:
+		if name == s.config.Domain {
+			name = string("self.") + name
+		}
 		records, err := s.AddressRecords(q, name, nil, bufsize, dnssec, false)
 		if isEtcdNameError(err, s) {
 			m = s.NameError(req)
