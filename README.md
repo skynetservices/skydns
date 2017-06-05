@@ -132,6 +132,7 @@ SkyDNS uses these environment variables:
 * `SKYDNS_PATH_PREFIX` - backend(etcd) path prefix, defaults to skydns (i.e. if it is set to `mydns`, the SkyDNS's configuration object should be stored under the key `/mydns/config`). Overwrite with `-path-prefix` string flag.
 * `SKYDNS_SYSTEMD`: set to `true` to bind to socket(s) activated by systemd (ignores SKYDNS_ADDR). Overwrite with `-systemd` bool flag.
 * `SKYDNS_NDOTS`: how many labels a name should have before we allow forwarding. Default to 2.
+* `VERBOSE`: log the queries made againt the server. Defaults to false
 
 For [Prometheus](http://prometheus.io/) the following environment variables
 are available:
