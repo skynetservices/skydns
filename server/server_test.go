@@ -9,6 +9,8 @@ package server
 import (
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,7 +57,7 @@ func delService(t *testing.T, s *server, k string) {
 	}
 }
 
-func newTestServer(t *testing.T, c bool) *server {
+func newTestServerWithOptions(t *testing.T, useCache bool, domain string, nameservers []string) *server {
 	Port += 10
 	StrPort = strconv.Itoa(Port)
 	s := new(server)
@@ -69,22 +71,32 @@ func newTestServer(t *testing.T, c bool) *server {
 	s.group = new(sync.WaitGroup)
 	s.scache = cache.New(100, 0)
 	s.rcache = cache.New(100, 0)
-	if c {
+	if useCache {
 		s.rcache = cache.New(100, 60) // 100 items, 60s ttl
 	}
 	s.config = new(Config)
-	s.config.Domain = "skydns.test."
+	s.config.Domain = domain
 	s.config.DnsAddr = "127.0.0.1:" + StrPort
-	s.config.Nameservers = []string{"8.8.4.4:53"}
+	s.config.Nameservers = nameservers
 	SetDefaults(s.config)
-	s.config.Local = "104.server1.development.region1.skydns.test."
+	s.config.Local = "104.server1.development.region1." + domain
 	s.config.Priority = 10
 	s.config.RCacheTtl = RCacheTtl
 	s.config.Ttl = 3600
 	s.config.Ndots = 2
 
-	s.dnsUDPclient = &dns.Client{Net: "udp", ReadTimeout: 2 * s.config.ReadTimeout, WriteTimeout: 2 * s.config.ReadTimeout, SingleInflight: true}
-	s.dnsTCPclient = &dns.Client{Net: "tcp", ReadTimeout: 2 * s.config.ReadTimeout, WriteTimeout: 2 * s.config.ReadTimeout, SingleInflight: true}
+	s.dnsUDPclient = &dns.Client{
+		Net:            "udp",
+		ReadTimeout:    2 * s.config.ReadTimeout,
+		WriteTimeout:   2 * s.config.ReadTimeout,
+		SingleInflight: true,
+	}
+	s.dnsTCPclient = &dns.Client{
+		Net:            "tcp",
+		ReadTimeout:    2 * s.config.ReadTimeout,
+		WriteTimeout:   2 * s.config.ReadTimeout,
+		SingleInflight: true,
+	}
 
 	s.backend = backendetcd.NewBackend(kapi, ctx, &backendetcd.Config{
 		Ttl:      s.config.Ttl,
@@ -94,6 +106,11 @@ func newTestServer(t *testing.T, c bool) *server {
 	go s.Run()
 	time.Sleep(500 * time.Millisecond) // Yeah, yeah, should do a proper fix
 	return s
+}
+
+func newTestServer(t *testing.T, c bool) *server {
+	const googleDNS = "8.8.4.4:53"
+	return newTestServerWithOptions(t, c, "skydns.test.", []string{googleDNS})
 }
 
 func newTestServerDNSSEC(t *testing.T, cache bool) *server {
@@ -156,6 +173,113 @@ func TestDNSForward(t *testing.T) {
 	}
 	if resp.Rcode != dns.RcodeServerFailure {
 		t.Fatal("answer expected to have rcode equal to RcodeFailure")
+	}
+}
+
+type MockTruncatedDNSHandler struct {
+	t        *testing.T
+	truncate bool
+
+	requests int
+}
+
+func (m *MockTruncatedDNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+	var msg *dns.Msg
+	if m.truncate {
+		msg = &dns.Msg{
+			Question: r.Question,
+		}
+		msg.Truncated = true
+	} else {
+		msg = &dns.Msg{
+			Question: r.Question,
+			Answer: []dns.RR{
+				newA("truncated.skydns2.local. A 10.2.3.4"),
+			},
+		}
+	}
+
+	msg.Id = r.Id
+	if err := w.WriteMsg(msg); err != nil {
+		m.t.Fatal("WriteMessage", err)
+	}
+
+	m.requests++
+}
+
+func TestDNSForwardRetryTruncated(t *testing.T) {
+	upstreamPort := Port + 1
+	upstreamEndpoint := fmt.Sprintf("127.0.0.1:%d", upstreamPort)
+
+	handlerUDP := &MockTruncatedDNSHandler{truncate: true}
+	upstreamUDP := &dns.Server{
+		Addr:    fmt.Sprintf("127.0.0.1:%d", upstreamPort),
+		Net:     "udp",
+		Handler: handlerUDP,
+	}
+	go func() {
+		if err := upstreamUDP.ListenAndServe(); err != nil {
+			t.Fatal("ListenAndServe", err)
+		}
+	}()
+	defer upstreamUDP.Shutdown()
+
+	handlerTCP := &MockTruncatedDNSHandler{truncate: false}
+	upstreamTCP := &dns.Server{
+		Addr:    upstreamEndpoint,
+		Net:     "tcp",
+		Handler: handlerTCP,
+	}
+
+	go func() {
+		for {
+			// Note: the probe below that sends a 0-byte request causes the
+			// ListenAndServe to return with an error. We force the server
+			// to ignore such errors.
+			upstreamTCP.ListenAndServe()
+		}
+	}()
+	defer upstreamTCP.Shutdown()
+
+	// Wait for the server to come up.
+	start := time.Now()
+	for {
+		conn, err := net.Dial("tcp", upstreamEndpoint)
+		if err == nil {
+			msg := &dns.Msg{}
+			msg.SetQuestion("test.skydns2.test.", dns.TypeA)
+			conn.Close()
+			break
+		}
+		if time.Now().Sub(start) > 1*time.Minute {
+			t.Fatalf("timeout waiting for mock server to come up")
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	s := newTestServerWithOptions(
+		t, false, "skydns.test.", []string{
+			fmt.Sprintf("127.0.0.1:%d", upstreamPort),
+		})
+	defer s.Stop()
+
+	c := new(dns.Client)
+	m := new(dns.Msg)
+
+	m.SetQuestion("truncated.skydns2.test.", dns.TypeA)
+	_, _, err := c.Exchange(m, "127.0.0.1:"+StrPort)
+
+	if handlerUDP.requests != 1 {
+		t.Errorf("UDP server got wrong number of request: %v != 1",
+			handlerUDP.requests)
+	}
+	if handlerTCP.requests != 1 {
+		t.Errorf("TCP server got wrong number of request: %v != 1",
+			handlerTCP.requests)
+	}
+
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
