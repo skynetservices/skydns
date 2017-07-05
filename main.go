@@ -122,7 +122,7 @@ func main() {
 	var clientv2 etcd.KeysAPI
 
 	if config.Etcd3 {
-		clientptr, err = newEtcdV3Client(machines, tlspem, tlskey, cacert)
+		clientptr, err = newEtcdV3Client(machines, tlspem, tlskey, cacert, username, password)
 		clientv3 = *clientptr
 	} else {
 		clientv2, err = newEtcdV2Client(machines, tlspem, tlskey, cacert, username, password)
@@ -300,7 +300,7 @@ func newEtcdV2Client(machines []string, certFile, keyFile, caFile, username, pas
 	return etcd.NewKeysAPI(cli), nil
 }
 
-func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etcdv3.Client, error) {
+func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert, username, password string) (*etcdv3.Client, error) {
 
 	tr, err := newHTTPSTransport(tlsCert, tlsKey, tlsCACert)
 	if err != nil {
@@ -311,6 +311,8 @@ func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etc
 	etcdCfg := etcdv3.Config {
 		Endpoints: machines,
 		TLS: tr.TLSClientConfig,
+		Username:  username,
+		Password:  password,
 	}
 	cli, err := etcdv3.New(etcdCfg)
 	if err != nil {
