@@ -144,21 +144,6 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	q := req.Question[0]
 	name := strings.ToLower(q.Name)
 
-	if q.Qtype == dns.TypeANY {
-		m.Authoritative = false
-		m.Rcode = dns.RcodeRefused
-		m.RecursionAvailable = false
-		m.RecursionDesired = false
-		m.Compress = false
-		w.WriteMsg(m)
-
-		metrics.ReportRequestCount(m, metrics.Auth)
-		metrics.ReportDuration(m, start, metrics.Auth)
-		metrics.ReportErrorCount(m, metrics.Auth)
-
-		return
-	}
-
 	if o := req.IsEdns0(); o != nil {
 		bufsize = o.UDPSize()
 		dnssec = o.Do()
@@ -365,6 +350,13 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 			return
 		}
 		m.Answer = append(m.Answer, records...)
+	case dns.TypeANY:
+		records, extra, err := s.SRVRecords(q, name, bufsize, dnssec)
+		if err != nil {
+			// NODATA
+		}
+		m.Answer = append(m.Answer, records...)
+		m.Extra = append(m.Extra, extra...)
 	case dns.TypeTXT:
 		records, err := s.TXTRecords(q, name)
 		if isEtcdNameError(err, s) {
