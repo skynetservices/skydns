@@ -8,36 +8,41 @@
 package etcd3
 
 import (
-	etcdv3 "github.com/coreos/etcd/clientv3"
-	"golang.org/x/net/context"
-	"github.com/skynetservices/skydns/singleflight"
-	"strings"
-	"github.com/skynetservices/skydns/msg"
-	"fmt"
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	"encoding/json"
+	"fmt"
+	"strings"
+
+	etcdv3 "github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/mvcc/mvccpb"
+	"github.com/skynetservices/skydns/msg"
+	"github.com/skynetservices/skydns/singleflight"
+	"golang.org/x/net/context"
 )
 
 type Config struct {
-	Ttl uint32
+	Ttl      uint32
 	Priority uint16
 }
 
 type Backendv3 struct {
-	client etcdv3.Client
-	ctx context.Context
-	config *Config
+	client   etcdv3.Client
+	ctx      context.Context
+	config   *Config
 	inflight *singleflight.Group
 }
 
 // NewBackendv3 returns a new Backend for SkyDNS, backed by etcd v3
-func NewBackendv3 (client etcdv3.Client, ctx context.Context, config *Config) *Backendv3 {
+func NewBackendv3(client etcdv3.Client, ctx context.Context, config *Config) *Backendv3 {
 	return &Backendv3{
-		client: client,
-		ctx: ctx,
-		config: config,
+		client:   client,
+		ctx:      ctx,
+		config:   config,
 		inflight: &singleflight.Group{},
 	}
+}
+
+func (g *Backend) HasSynced() bool {
+	return true
 }
 
 func (g *Backendv3) Records(name string, exact bool) ([]msg.Service, error) {
@@ -74,7 +79,7 @@ func (g *Backendv3) ReverseRecord(name string) (*msg.Service, error) {
 }
 
 func (g *Backendv3) get(path string, recursive bool) (*etcdv3.GetResponse, error) {
-	resp, err := g.inflight.Do(path, func() (interface{}, error){
+	resp, err := g.inflight.Do(path, func() (interface{}, error) {
 		if recursive == true {
 			r, e := g.client.Get(g.ctx, path, etcdv3.WithPrefix())
 			if e != nil {
@@ -97,11 +102,11 @@ func (g *Backendv3) get(path string, recursive bool) (*etcdv3.GetResponse, error
 }
 
 type bareService struct {
-	Host string
-	Port int
+	Host     string
+	Port     int
 	Priority int
-	Weight int
-	Text string
+	Weight   int
+	Text     string
 }
 
 func (g *Backendv3) loopNodes(kv []*mvccpb.KeyValue, nameParts []string, star bool, bx map[bareService]bool) (sx []msg.Service, err error) {
@@ -127,17 +132,16 @@ Nodes:
 			}
 		}
 
-
 		serv := new(msg.Service)
 		if err := json.Unmarshal(item.Value, serv); err != nil {
 			return nil, err
 		}
 
 		b := bareService{serv.Host,
-				 serv.Port,
-				 serv.Priority,
-				 serv.Weight,
-				 serv.Text}
+			serv.Port,
+			serv.Priority,
+			serv.Weight,
+			serv.Text}
 
 		bx[b] = true
 		serv.Key = string(item.Key)
