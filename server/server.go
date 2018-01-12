@@ -144,7 +144,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	q := req.Question[0]
 	name := strings.ToLower(q.Name)
 
-	if q.Qtype == dns.TypeANY || !server.backend.HasSynced() {
+	if q.Qtype == dns.TypeANY || !server.backed.HasSynced() {
 		m.Authoritative = false
 		m.Rcode = dns.RcodeRefused
 		m.RecursionAvailable = false

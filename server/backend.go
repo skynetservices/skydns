@@ -45,8 +45,3 @@ func (g FirstBackend) ReverseRecord(name string) (record *msg.Service, err error
 	}
 	return nil, lastError
 }
-
-func (g FirstBackend HasSynced() bool {
-	// Stub implementation only to satisfy interface. 
-	return true
-}
