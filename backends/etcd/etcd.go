@@ -42,10 +42,6 @@ func NewBackend(client etcd.KeysAPI, ctx context.Context, config *Config) *Backe
 	}
 }
 
-func (g *Backend) HasSynced() bool {
-	return true
-}
-
 func (g *Backend) Records(name string, exact bool) ([]msg.Service, error) {
 	path, star := msg.PathWithWildcard(name)
 	r, err := g.get(path, true)

@@ -7,7 +7,6 @@ package server
 import "github.com/skynetservices/skydns/msg"
 
 type Backend interface {
-	HasSynced() bool
 	Records(name string, exact bool) ([]msg.Service, error)
 	ReverseRecord(name string) (*msg.Service, error)
 }
