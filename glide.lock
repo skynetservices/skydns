@@ -1,0 +1,76 @@
+hash: 3e68cbb7ff932a877b004fc10d2494fdbdfe00346ad5f18668a69ddd3a26feb7
+updated: 2016-08-22T23:08:29.960434572+02:00
+imports:
+- name: github.com/beorn7/perks
+  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
+  subpackages:
+  - quantile
+- name: github.com/bmatcuk/doublestar
+  version: ec3b4af762f792cb93bf2518ff9ac408dbdc2b4e
+- name: github.com/codegangsta/cli
+  version: 1efa31f08b9333f1bd4882d61f9d668a70cd902e
+- name: github.com/coreos/etcd
+  version: 9efa00d1030d4bf62eb8e5ec130023aeb1b8e2d0
+  subpackages:
+  - client
+  - pkg/fileutil
+  - pkg/pathutil
+  - pkg/tlsutil
+  - pkg/transport
+  - pkg/types
+- name: github.com/coreos/go-systemd
+  version: d6c05a1dcbb5ac02b7653da4d99e5db340c20778
+  subpackages:
+  - activation
+  - journal
+- name: github.com/coreos/pkg
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  subpackages:
+  - capnslog
+- name: github.com/golang/protobuf
+  version: f592bd283e9ef86337a432eb50e592278c3d534d
+  subpackages:
+  - proto
+- name: github.com/inconshreveable/mousetrap
+  version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
+- name: github.com/Masterminds/semver
+  version: 8d0431362b544d1a3536cca26684828866a7de09
+- name: github.com/Masterminds/vcs
+  version: fbe9fb6ad5b5f35b3e82a7c21123cfc526cbf895
+- name: github.com/matttproud/golang_protobuf_extensions
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  subpackages:
+  - pbutil
+- name: github.com/miekg/dns
+  version: db96a2b759cdef4f11a34506a42eb8d1290c598e
+- name: github.com/prometheus/client_golang
+  version: c5b7fccd204277076155f10851dad72b76a49317
+  subpackages:
+  - prometheus
+- name: github.com/prometheus/client_model
+  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
+  subpackages:
+  - go
+- name: github.com/prometheus/common
+  version: ebdfc6da46522d58825777cf1f90490a5b1ef1d8
+  subpackages:
+  - expfmt
+  - internal/bitbucket.org/ww/goautoneg
+  - model
+- name: github.com/prometheus/procfs
+  version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
+- name: github.com/spf13/cobra
+  version: 1f4717172e07e12150feb061b2ab847c3054f53f
+- name: github.com/spf13/pflag
+  version: 103ce5cd2042f2fe629c1957abb64ab3e7f50235
+- name: github.com/ugorji/go
+  version: 4a1cb5252a6951f715a85d0e4be334c2a2dbf2a2
+  subpackages:
+  - codec
+- name: golang.org/x/net
+  version: 7394c112eae4dba7e96bfcfe738e6373d61772b4
+  subpackages:
+  - context
+- name: gopkg.in/yaml.v2
+  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+testImports: []
