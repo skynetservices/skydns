@@ -10,11 +10,12 @@ package cache
 // races. This should be optimized.
 
 import (
-	"crypto/sha1"
+	"encoding/binary"
 	"sync"
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/tildeleb/hashland/spooky"
 )
 
 // Elem hold an answer and additional section that returned from the cache.
@@ -119,10 +120,23 @@ func (c *Cache) Search(s string) (*dns.Msg, time.Time, bool) {
 	return nil, time.Time{}, false
 }
 
+// Wrap ugly spooky hash conversions to string
+func spooky128(i []byte) string {
+	var H [2]uint64
+	hash_1 := make([]byte, 8)
+	hash_2 := make([]byte, 8)
+
+	H[0], H[1] = spooky.Hash128(i, 0)
+
+	binary.LittleEndian.PutUint64(hash_1, H[0])
+	binary.LittleEndian.PutUint64(hash_2, H[1])
+
+	return string(hash_1) + string(hash_2)
+}
+
 // Key creates a hash key from a question section. It creates a different key
 // for requests with DNSSEC.
 func Key(q dns.Question, dnssec, tcp bool) string {
-	h := sha1.New()
 	i := append([]byte(q.Name), packUint16(q.Qtype)...)
 	if dnssec {
 		i = append(i, byte(255))
@@ -130,12 +144,11 @@ func Key(q dns.Question, dnssec, tcp bool) string {
 	if tcp {
 		i = append(i, byte(254))
 	}
-	return string(h.Sum(i))
+	return spooky128(i)
 }
 
 // Key uses the name, type and rdata, which is serialized and then hashed as the key for the lookup.
 func KeyRRset(rrs []dns.RR) string {
-	h := sha1.New()
 	i := []byte(rrs[0].Header().Name)
 	i = append(i, packUint16(rrs[0].Header().Rrtype)...)
 	for _, r := range rrs {
@@ -160,7 +173,7 @@ func KeyRRset(rrs []dns.RR) string {
 		case *dns.TXT:
 		}
 	}
-	return string(h.Sum(i))
+	return spooky128(i)
 }
 
 func packUint16(i uint16) []byte { return []byte{byte(i >> 8), byte(i)} }
