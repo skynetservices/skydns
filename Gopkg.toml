@@ -30,7 +30,7 @@
 
 [[override]]
   name = "github.com/coreos/etcd"
-  version = "=3.2.14"
+  version = "=3.2.15"
 
 [[constraint]]
   name = "github.com/coreos/go-systemd"
