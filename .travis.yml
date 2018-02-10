@@ -1,12 +1,18 @@
 language: go
+env:
+  - DEP_VERSION="0.4.1"
 go:
   - 1.8
+before_install:
+  - curl -L -s https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 -o $GOPATH/bin/dep
+  - chmod +x $GOPATH/bin/dep
+install:
+  - dep ensure
 before_script:
   - curl -L  https://github.com/coreos/etcd/releases/download/v2.3.1/etcd-v2.3.1-linux-amd64.tar.gz -o etcd-v2.3.1-linux-amd64.tar.gz
   - tar xzvf etcd-v2.3.1-linux-amd64.tar.gz
   - ./etcd-v2.3.1-linux-amd64/etcd &
   - go get
-  - go get github.com/coreos/go-etcd/etcd
 
   - go get github.com/rcrowley/go-metrics/stathat
 script:
