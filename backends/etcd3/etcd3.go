@@ -11,12 +11,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"context"
 
 	etcdv3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/skynetservices/skydns/msg"
 	"github.com/skynetservices/skydns/singleflight"
-	"golang.org/x/net/context"
 )
 
 type Config struct {

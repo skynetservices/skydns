@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"context"
 
 	backendetcd "github.com/skynetservices/skydns/backends/etcd"
 	backendetcdv3 "github.com/skynetservices/skydns/backends/etcd3"
@@ -27,7 +28,6 @@ import (
 	etcdv3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/miekg/dns"
-	"golang.org/x/net/context"
 )
 
 var (

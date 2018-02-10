@@ -10,12 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"context"
 
 	"github.com/skynetservices/skydns/msg"
 	"github.com/skynetservices/skydns/singleflight"
 
 	etcd "github.com/coreos/etcd/client"
-	"golang.org/x/net/context"
 )
 
 // Config represents configuration for the Etcd backend - these values
