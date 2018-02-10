@@ -7,6 +7,7 @@ package server
 import "github.com/skynetservices/skydns/msg"
 
 type Backend interface {
+	HasSynced() bool
 	Records(name string, exact bool) ([]msg.Service, error)
 	ReverseRecord(name string) (*msg.Service, error)
 }
@@ -43,4 +44,9 @@ func (g FirstBackend) ReverseRecord(name string) (record *msg.Service, err error
 		}
 	}
 	return nil, lastError
+}
+
+func (g FirstBackend) HasSynced() bool {
+	// Stub implementation only to satisfy interface. 
+	return true
 }

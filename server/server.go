@@ -144,7 +144,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	q := req.Question[0]
 	name := strings.ToLower(q.Name)
 
-	if q.Qtype == dns.TypeANY {
+	if q.Qtype == dns.TypeANY || !server.backend.HasSynced() {
 		m.Authoritative = false
 		m.Rcode = dns.RcodeRefused
 		m.RecursionAvailable = false
@@ -200,7 +200,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	}
 
 	for zone, ns := range *s.config.stub {
-		if strings.HasSuffix(name, "." + zone) || name == zone {
+		if strings.HasSuffix(name, "."+zone) || name == zone {
 			metrics.ReportRequestCount(req, metrics.Stub)
 
 			resp := s.ServeDNSStubForward(w, req, ns)
@@ -232,7 +232,7 @@ func (s *server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 
-	if q.Qclass != dns.ClassCHAOS && !strings.HasSuffix(name, "." +s.config.Domain) && name != s.config.Domain {
+	if q.Qclass != dns.ClassCHAOS && !strings.HasSuffix(name, "."+s.config.Domain) && name != s.config.Domain {
 		metrics.ReportRequestCount(req, metrics.Rec)
 
 		resp := s.ServeDNSForward(w, req)
