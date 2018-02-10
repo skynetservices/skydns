@@ -41,7 +41,7 @@ func NewBackendv3(client etcdv3.Client, ctx context.Context, config *Config) *Ba
 	}
 }
 
-func (g *Backend) HasSynced() bool {
+func (g *Backendv3) HasSynced() bool {
 	return true
 }
 
