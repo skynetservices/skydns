@@ -7,10 +7,10 @@
 package etcd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"context"
 
 	"github.com/skynetservices/skydns/msg"
 	"github.com/skynetservices/skydns/singleflight"

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"context"
 
 	backendetcd "github.com/skynetservices/skydns/backends/etcd"
 	backendetcdv3 "github.com/skynetservices/skydns/backends/etcd3"
@@ -154,7 +154,6 @@ func main() {
 		}
 	}
 
-
 	if err := server.SetDefaults(config); err != nil {
 		log.Fatalf("skydns: defaults could not be set from /etc/resolv.conf: %v", err)
 	}
@@ -163,16 +162,15 @@ func main() {
 		config.Local = dns.Fqdn(config.Local)
 	}
 
-
 	var backend server.Backend
 	if config.Etcd3 {
 		backend = backendetcdv3.NewBackendv3(clientv3, ctx, &backendetcdv3.Config{
-			Ttl: config.Ttl,
+			Ttl:      config.Ttl,
 			Priority: config.Priority,
 		})
 	} else {
 		backend = backendetcd.NewBackend(clientv2, ctx, &backendetcd.Config{
-			Ttl: config.Ttl,
+			Ttl:      config.Ttl,
 			Priority: config.Priority,
 		})
 	}
@@ -185,14 +183,14 @@ func main() {
 
 			if config.Etcd3 {
 				var watcher etcdv3.WatchChan
-				watcher = clientv3.Watch(ctx, msg.Path(config.Domain) + "/dns/stub/", etcdv3.WithPrefix())
+				watcher = clientv3.Watch(ctx, msg.Path(config.Domain)+"/dns/stub/", etcdv3.WithPrefix())
 
 				for wresp := range watcher {
 					if wresp.Err() != nil {
 						log.Printf("skydns: stubzone update failed, sleeping %s + ~3s", duration)
 						time.Sleep(duration + (time.Duration(rand.Float32() * 3e9)))
 						duration *= 2
-						if duration > 32 * time.Second {
+						if duration > 32*time.Second {
 							duration = 32 * time.Second
 						}
 					} else {
@@ -307,10 +305,9 @@ func newEtcdV3Client(machines []string, tlsCert, tlsKey, tlsCACert string) (*etc
 		return nil, err
 	}
 
-
-	etcdCfg := etcdv3.Config {
+	etcdCfg := etcdv3.Config{
 		Endpoints: machines,
-		TLS: tr.TLSClientConfig,
+		TLS:       tr.TLSClientConfig,
 	}
 	cli, err := etcdv3.New(etcdCfg)
 	if err != nil {

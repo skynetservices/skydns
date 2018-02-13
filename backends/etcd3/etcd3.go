@@ -8,10 +8,10 @@
 package etcd3
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"context"
 
 	etcdv3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"

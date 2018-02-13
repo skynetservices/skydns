@@ -47,6 +47,6 @@ func (g FirstBackend) ReverseRecord(name string) (record *msg.Service, err error
 }
 
 func (g FirstBackend) HasSynced() bool {
-	// Stub implementation only to satisfy interface. 
+	// Stub implementation only to satisfy interface.
 	return true
 }
