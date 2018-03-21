@@ -420,7 +420,7 @@ Doing an A/AAAA query for this will lead to the following response:
     www.miek.nl.            3600    IN      CNAME   a.miek.nl.
     a.miek.nl.              3600    IN      A       176.58.119.54
 
-The first CNAME is generated from within SkyDNS, the other CNANE is returned
+The first CNAME is generated from within SkyDNS, the other CNAME is returned
 from the remote name server.
 
 
