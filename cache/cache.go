@@ -55,10 +55,10 @@ func (c *Cache) Remove(s string) {
 // Must be called under a write lock.
 func (c *Cache) EvictRandom() {
 	clen := len(c.m)
-	if clen < c.capacity {
+	if clen <= c.capacity {
 		return
 	}
-	i := c.capacity - clen
+	i := clen - c.capacity
 	for k, _ := range c.m {
 		delete(c.m, k)
 		i--
