@@ -320,7 +320,7 @@ func newHTTPSTransport(certFile, keyFile, caFile string) (*http.Transport, error
 	info := transport.TLSInfo{
 		CertFile: certFile,
 		KeyFile:  keyFile,
-		CAFile:   caFile,
+		TrustedCAFile: caFile,
 	}
 	cfg, err := info.ClientConfig()
 	if err != nil {
