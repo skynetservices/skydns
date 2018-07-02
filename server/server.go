@@ -18,7 +18,6 @@ import (
 	"github.com/skynetservices/skydns/msg"
 
 	etcd "github.com/coreos/etcd/client"
-	"github.com/coreos/go-systemd/activation"
 	"github.com/miekg/dns"
 )
 
@@ -63,40 +62,8 @@ func (s *server) Run() error {
 	}
 
 	if s.config.Systemd {
-		packetConns, err := activation.PacketConns(false)
-		if err != nil {
+		if err := s.activateSystemd(mux, dnsReadyMsg); err != nil {
 			return err
-		}
-		listeners, err := activation.Listeners(true)
-		if err != nil {
-			return err
-		}
-		if len(packetConns) == 0 && len(listeners) == 0 {
-			return fmt.Errorf("no UDP or TCP sockets supplied by systemd")
-		}
-		for _, p := range packetConns {
-			if u, ok := p.(*net.UDPConn); ok {
-				s.group.Add(1)
-				go func() {
-					defer s.group.Done()
-					if err := dns.ActivateAndServe(nil, u, mux); err != nil {
-						fatalf("%s", err)
-					}
-				}()
-				dnsReadyMsg(u.LocalAddr().String(), "udp")
-			}
-		}
-		for _, l := range listeners {
-			if t, ok := l.(*net.TCPListener); ok {
-				s.group.Add(1)
-				go func() {
-					defer s.group.Done()
-					if err := dns.ActivateAndServe(t, nil, mux); err != nil {
-						fatalf("%s", err)
-					}
-				}()
-				dnsReadyMsg(t.Addr().String(), "tcp")
-			}
 		}
 	} else {
 		s.group.Add(1)
